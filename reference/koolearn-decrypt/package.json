@@ -1,0 +1,15 @@
+{
+  "name": "koolearn-decrypt",
+  "version": "0.3.3",
+  "description": "libdecrypt",
+  "main": "main.js",
+  "author": "gs",
+  "license": "ISC",
+  "gypfile": true,
+  "dependencies": {
+    "nan": "^2.14.0"
+  },
+  "devDependencies": {
+    "tape": "^4.6.3"
+  }
+}

@@ -1,0 +1,1282 @@
+# decrypt.node DWARF 符号清单
+
+> 由 `scripts/dwarf-functions.py` 从 `reference/koolearn-decrypt/decrypt.node.dSYM`
+> 自动提取（`dwarfdump --debug-info`）。仅供研究参考，勿手工编辑。
+
+## 函数（191 个，23 个源文件）
+
+---
+
+## 源文件: AESDecode.c
+
+### InvMixColumnsDecKey
+    void InvMixColumnsDecKey(uint32_t * pInput, uint32_t * pOutput)
+    地址: 0x0000000000002c70-2d41 (0xd1 bytes)
+    源码行: 13
+
+### AES_DECRYPT
+    void AES_DECRYPT(uint32_t keyLength, uint32_t * _pInput, uint32_t * _pOutput, uint32_t * local_key, uint32_t * local_temp)
+    地址: 0x0000000000002d50-3ce1 (0xf91 bytes)
+    源码行: 56
+
+### AesDecryptECB
+    void AesDecryptECB(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x0000000000003cf0-3da6 (0xb6 bytes)
+    源码行: 606
+
+### AesDecryptCBC_Normal
+    void AesDecryptCBC_Normal(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    源码行: 628
+
+### AesDecryptCBC_InPlace
+    void AesDecryptCBC_InPlace(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    源码行: 654
+
+### AesDecryptCBC
+    void AesDecryptCBC(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x0000000000003fe0-41aa (0x1ca bytes)
+    源码行: 692
+
+### AesDecryptPCBC_Normal
+    void AesDecryptPCBC_Normal(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    源码行: 704
+
+### AesDecryptPCBC_InPlace
+    void AesDecryptPCBC_InPlace(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    源码行: 728
+
+### AesDecryptPCBC
+    void AesDecryptPCBC(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x00000000000043c0-4569 (0x1a9 bytes)
+    源码行: 761
+
+---
+
+## 源文件: AESEncode.c
+
+### AES_ENCRYPT
+    void AES_ENCRYPT(uint32_t keyLength, uint32_t * pInput, uint32_t * pOutput, uint32_t * AesEncKey, uint32_t * temp)
+    地址: 0x0000000000009280-a1e0 (0xf60 bytes)
+    源码行: 1001
+
+### RotWord_Right
+    uint32_t RotWord_Right(uint32_t iRotate)
+    源码行: 934
+
+### SubWord
+    uint32_t SubWord(uint32_t input)
+    源码行: 940
+
+### KeyExpansion
+    void KeyExpansion(AESContext * pContext, uint8_t * pKey)
+    地址: 0x000000000000a1e0-a38b (0x1ab bytes)
+    源码行: 1232
+
+### AesSetKey
+    void AesSetKey(AesCtx * pCtx, int iKeyLength, BlockMode iBlockMode, void * key, void * pInitialVector)
+    地址: 0x000000000000a390-a4b1 (0x121 bytes)
+    源码行: 1278
+
+### AesSetInitVector
+    void AesSetInitVector(AesCtx * pCtx, void * pInitialVector)
+    地址: 0x000000000000a4c0-a4e0 (0x20 bytes)
+    源码行: 1332
+
+### AesSetFeedbackSize
+    void AesSetFeedbackSize(AesCtx * pCtx, int iFeedbackSize)
+    地址: 0x000000000000a4e0-a4ec (0xc bytes)
+    源码行: 1342
+
+### padding
+    int padding(void * pToPad, int iSize)
+    源码行: 888
+
+### XOR2_64
+    void XOR2_64(uint64_t * src, uint64_t * src2, uint64_t * dest)
+    源码行: 872
+
+### AesEncryptCBC
+    void AesEncryptCBC(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000a510-a611 (0x101 bytes)
+    源码行: 1366
+
+### AesEncryptPCBC_Normal
+    void AesEncryptPCBC_Normal(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    源码行: 1396
+
+### AesEncryptPCBC_InPlace
+    void AesEncryptPCBC_InPlace(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    源码行: 1425
+
+### AesEncryptPCBC
+    void AesEncryptPCBC(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000a870-aa81 (0x211 bytes)
+    源码行: 1459
+
+### AddCounter
+    void AddCounter(uint8_t * pCnt)
+    源码行: 854
+
+### aes_crt_process
+    void aes_crt_process(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000aa90-accf (0x23f bytes)
+    源码行: 1484
+
+### AesEncryptCRT
+    void AesEncryptCRT(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000acd0-ad1e (0x4e bytes)
+    源码行: 1512
+
+### AesDecryptCRT
+    void AesDecryptCRT(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000ad20-ad2a (0xa bytes)
+    源码行: 1518
+
+### AesEncryptCFBWords
+    void AesEncryptCFBWords(AesCtx * pContext, void * pOutput, void * pInput, int iSize, int iFeedbackuint8_ts)
+    地址: 0x000000000000ad30-b056 (0x326 bytes)
+    源码行: 1526
+
+### AesDecryptCFBWords
+    void AesDecryptCFBWords(AesCtx * pContext, void * pOutput, void * pInput, int iSize, int iFeedbackuint8_ts)
+    地址: 0x000000000000b060-b3a1 (0x341 bytes)
+    源码行: 1579
+
+### AesDecryptCFBWordsInPlace
+    void AesDecryptCFBWordsInPlace(AesCtx * pContext, void * pOutput, void * pInput, int iSize, int iFeedbackuint8_ts)
+    地址: 0x000000000000b3b0-b6bd (0x30d bytes)
+    源码行: 1644
+
+### AesEncryptCFBfb
+    void AesEncryptCFBfb(AesCtx * pContext, void * pOutput, void * pInput, int iSize, int iFeedbackuint8_ts)
+    地址: 0x000000000000b6c0-bc6c (0x5ac bytes)
+    源码行: 1716
+
+### AesDecryptCFBfb
+    void AesDecryptCFBfb(AesCtx * pContext, void * pOutput, void * pInput, int iSize, uint32_t iFeedbackuint8_ts)
+    地址: 0x000000000000bcb0-c251 (0x5a1 bytes)
+    源码行: 1875
+
+### AesDecryptCFBfbInPlace
+    void AesDecryptCFBfbInPlace(AesCtx * pContext, void * pOutput, void * pInput, int iSize, int iFeedbackuint8_ts)
+    地址: 0x000000000000c290-c7eb (0x55b bytes)
+    源码行: 2022
+
+### paddingWithRoundSz
+    int paddingWithRoundSz(void * pToPad, int iSize, int roundSize)
+    源码行: 904
+
+### AesEncryptCFB
+    void AesEncryptCFB(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000c830-c8b7 (0x87 bytes)
+    源码行: 2184
+
+### AesRoundSize
+    int AesRoundSize(int iSize, int iAlignSize)
+    源码行: 1349
+
+### AesDecryptCFB
+    void AesDecryptCFB(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000c8c0-c91d (0x5d bytes)
+    源码行: 2197
+
+### aes_ofb_process_words
+    void aes_ofb_process_words(AesCtx * pContext, void * pOutput, void * pInput, int iSize, uint32_t iFeedBackSz)
+    地址: 0x000000000000c920-cbae (0x28e bytes)
+    源码行: 2219
+
+### aes_ofb_process_uint8_ts
+    void aes_ofb_process_uint8_ts(AesCtx * pContext, void * pOutput, void * pInput, int iSize, uint32_t iFeedBackSz)
+    地址: 0x000000000000cbb0-d09d (0x4ed bytes)
+    源码行: 2290
+
+### AesEncryptOFB
+    void AesEncryptOFB(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000d0e0-d167 (0x87 bytes)
+    源码行: 2447
+
+### AesDecryptOFB
+    void AesDecryptOFB(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000d170-d18d (0x1d bytes)
+    源码行: 2460
+
+### AesEncryptECB
+    void AesEncryptECB(AesCtx * pContext, void * pOutput, void * pInput, int iSize)
+    地址: 0x000000000000d190-d254 (0xc4 bytes)
+    源码行: 2475
+
+---
+
+## 源文件: aes.c
+
+### aes_gen_tables
+    void aes_gen_tables()
+    地址: 0x0000000000004570-48b8 (0x348 bytes)
+    源码行: 66
+
+### aes_set_key
+    int aes_set_key(aes_context * ctx, unsigned char * key, int nbits)
+    地址: 0x00000000000048c0-4dec (0x52c bytes)
+    源码行: 437
+
+### aes_encrypt
+    void aes_encrypt(aes_context * ctx, unsigned char * input, unsigned char * output)
+    地址: 0x0000000000004df0-5e47 (0x1057 bytes)
+    源码行: 588
+
+### aes_decrypt
+    void aes_decrypt(aes_context * ctx, unsigned char * input, unsigned char * output)
+    地址: 0x0000000000005e50-6e84 (0x1034 bytes)
+    源码行: 678
+
+---
+
+## 源文件: caesar.c
+
+### Caesar_Encrypt
+    void Caesar_Encrypt(const unsigned char * src, int slen, unsigned char * key, int klen, unsigned char * dst)
+    地址: 0x0000000000006e90-6ef6 (0x66 bytes)
+    源码行: 3
+
+### Caesar_Decrypt
+    void Caesar_Decrypt(const unsigned char * src, int slen, unsigned char * key, int klen, unsigned char * dst)
+    地址: 0x0000000000006f00-6f77 (0x77 bytes)
+    源码行: 12
+
+---
+
+## 源文件: common.c
+
+### auto_add_memset
+    void auto_add_memset(uint8_t ** dst, int value, size_t size)
+    地址: 0x000000000000e160-e17d (0x1d bytes)
+    源码行: 3
+
+### auto_add_memcpy
+    void auto_add_memcpy(uint8_t ** dst, void * src, size_t size)
+    地址: 0x000000000000e180-e19d (0x1d bytes)
+    源码行: 9
+
+### auto_add_memcpy_src
+    void auto_add_memcpy_src(void * dst, uint8_t ** src, size_t size)
+    地址: 0x000000000000e1a0-e1bd (0x1d bytes)
+    源码行: 15
+
+---
+
+## 源文件: encrypt.c
+
+### encryptPlan1
+    void encryptPlan1(dataTag * tag, encryptTag * e_tag, uint8_t * key, const uint8_t * p_data, int datalen)
+    源码行: 24
+
+### encryptByPlan
+    void encryptByPlan(dataTag * tag, encryptTag * e_tag, char * key, const uint8_t * p_data, int size)
+    地址: 0x0000000000006f80-7125 (0x1a5 bytes)
+    源码行: 12
+
+### decryptPlan1
+    void decryptPlan1(dataTag * tag, encryptTag * e_tag, unsigned char * key, const unsigned char * p_data, int datalen)
+    源码行: 87
+
+### decryptByPlan
+    void decryptByPlan(dataTag * tag, encryptTag * e_tag, char * key, char * p_data, int size)
+    地址: 0x0000000000007140-7379 (0x239 bytes)
+    源码行: 75
+
+### GetMd5
+    void GetMd5(uint8_t * p_src, size_t size, uint8_t * p_dst)
+    地址: 0x0000000000007390-73fd (0x6d bytes)
+    源码行: 176
+
+### createPartKey
+    void createPartKey(char * key, int p_size)
+    地址: 0x0000000000007400-743f (0x3f bytes)
+    源码行: 184
+
+---
+
+## 源文件: fence.c
+
+### Fence_Init
+    int Fence_Init(unsigned char * key, int klen, int slen)
+    源码行: 6
+
+### Fence_Encrypt
+    void Fence_Encrypt(const unsigned char * src, int slen, unsigned char * key, int klen, unsigned char * dst)
+    地址: 0x000000000000e1c0-e5d8 (0x418 bytes)
+    源码行: 20
+
+### Fence_Decrypt
+    void Fence_Decrypt(const unsigned char * src, int slen, unsigned char * key, int klen, unsigned char * dst)
+    地址: 0x000000000000e5e0-e8aa (0x2ca bytes)
+    源码行: 44
+
+---
+
+## 源文件: header.c
+
+### createHeader
+    void createHeader(header * p_header)
+    地址: 0x0000000000007440-7452 (0x12 bytes)
+    源码行: 5
+
+---
+
+## 源文件: libdecrypt.cc
+
+### CreateResult
+    v8::Local<v8::Object> CreateResult(int ret, uint8_t * data, uint32_t size)
+    地址: 0x0000000000001a70-1bd9 (0x169 bytes)
+    源码行: 12
+
+### Method
+    void Method(const Nan::FunctionCallbackInfo<v8::Value> & args)
+    地址: 0x0000000000001be0-1e60 (0x280 bytes)
+    源码行: 25
+
+### Init
+    void Init(v8::Local<v8::Object> exports)
+    地址: 0x0000000000001ef0-1f73 (0x83 bytes)
+    源码行: 88
+
+### node_register_module_v85
+    void node_register_module_v85(v8::Local<v8::Object> exports, v8::Local<v8::Value> module, v8::Local<v8::Context> context)
+    地址: 0x0000000000001f80-1f8a (0xa bytes)
+    源码行: 95
+
+---
+
+## 源文件: md5.c
+
+### MD5Init
+    void MD5Init(MD5_CTX * context)
+    地址: 0x0000000000007460-747e (0x1e bytes)
+    源码行: 10
+
+### MD5Decode
+    void MD5Decode(unsigned int * output, unsigned char * input, unsigned int len)
+    源码行: 67
+
+### MD5Transform
+    void MD5Transform(unsigned int * state, unsigned char * block)
+    地址: 0x0000000000007570-7e34 (0x8c4 bytes)
+    源码行: 80
+
+### MD5Encode
+    void MD5Encode(unsigned char * output, unsigned int * input, unsigned int len)
+    源码行: 54
+
+### MD5Update
+    void MD5Update(MD5_CTX * context, unsigned char * input, unsigned int inputlen)
+    源码行: 19
+
+### MD5Final
+    void MD5Final(MD5_CTX * context, unsigned char * digest)
+    地址: 0x0000000000007e40-7f8e (0x14e bytes)
+    源码行: 43
+
+---
+
+## 源文件: parser.c
+
+### encrypt_parse
+    void encrypt_parse(Pasrser_CTX * ctx, uint8_t * data, int len)
+    地址: 0x00000000000022b0-253b (0x28b bytes)
+    源码行: 52
+
+### decrypt_parse
+    int decrypt_parse(Pasrser_CTX * ctx, unsigned char * data, int len)
+    地址: 0x0000000000002540-2900 (0x3c0 bytes)
+    源码行: 123
+
+### parse_release
+    void parse_release(Pasrser_CTX * ctx)
+    源码行: 246
+
+### test
+    unsigned int test(int len, unsigned char * data)
+    地址: 0x0000000000002930-2a96 (0x166 bytes)
+    源码行: 251
+
+### test_version2
+    int test_version2(int len, unsigned char * data)
+    地址: 0x0000000000002aa0-2c6a (0x1ca bytes)
+    源码行: 303
+
+---
+
+## 源文件: rc4.c
+
+### swap
+    void swap(unsigned char * s1, unsigned char * s2)
+    源码行: 5
+
+### re_S
+    void re_S(unsigned char * S)
+    源码行: 13
+
+### re_T
+    void re_T(unsigned char * T, char * key, int keylen)
+    源码行: 21
+
+### re_Sbox
+    void re_Sbox(unsigned char * S, unsigned char * T)
+    源码行: 28
+
+### re_RC4
+    void re_RC4(unsigned char * S, char * key, int keylen)
+    源码行: 39
+
+### my_RC4
+    void my_RC4(char * src, int slen, char * key, int keylen)
+    地址: 0x000000000000d640-d9da (0x39a bytes)
+    源码行: 47
+
+---
+
+## 源文件: sha1.c
+
+### SHA1Reset
+    void SHA1Reset(SHA1Context * context)
+    地址: 0x0000000000008020-804f (0x2f bytes)
+    源码行: 71
+
+### SHA1Result
+    int SHA1Result(SHA1Context * context)
+    地址: 0x0000000000008050-8086 (0x36 bytes)
+    源码行: 104
+
+### SHA1PadMessage
+    void SHA1PadMessage(SHA1Context * context)
+    地址: 0x0000000000008090-8153 (0xc3 bytes)
+    源码行: 326
+
+### SHA1Input
+    void SHA1Input(SHA1Context * context, const unsigned char * message_array, unsigned int length)
+    地址: 0x0000000000008160-81f3 (0x93 bytes)
+    源码行: 143
+
+### SHA1ProcessMessageBlock
+    void SHA1ProcessMessageBlock(SHA1Context * context)
+    地址: 0x0000000000008200-8f62 (0xd62 bytes)
+    源码行: 207
+
+---
+
+## 源文件: tag.c
+
+### createEncryptTag
+    int createEncryptTag(encryptTag * p_tag)
+    地址: 0x000000000000d9e0-daa4 (0xc4 bytes)
+    源码行: 3
+
+### createDataTag
+    int createDataTag(dataTag * tag, encryptTag * e_tag, uint8_t * data, uint32_t size, uint8_t * key)
+    地址: 0x000000000000dab0-dadb (0x2b bytes)
+    源码行: 33
+
+### createExpiresTag
+    int createExpiresTag(expiresTag * tag, encryptTag * e_tag, uint8_t * key)
+    地址: 0x000000000000dae0-db3a (0x5a bytes)
+    源码行: 40
+
+### createTokenTag
+    int createTokenTag(tokenTag * tag, uint8_t * token, int32_t len)
+    地址: 0x000000000000db40-db62 (0x22 bytes)
+    源码行: 53
+
+### createHashTag
+    int createHashTag(hashTag * tag, uint8_t * data, size_t len)
+    地址: 0x000000000000db70-dc46 (0xd6 bytes)
+    源码行: 60
+
+### createKey
+    int createKey(encryptTag * e_tag, uint8_t * basekey, uint32_t keylen, int64_t expires, uint8_t * token, int useKey, uint8_t * out)
+    地址: 0x000000000000dc50-dd27 (0xd7 bytes)
+    源码行: 104
+
+### encryptTagWriteInto
+    int encryptTagWriteInto(uint8_t ** dst, encryptTag tag)
+    地址: 0x000000000000dd30-dda5 (0x75 bytes)
+    源码行: 140
+
+### dataTagWriteInto
+    int dataTagWriteInto(uint8_t ** dst, dataTag tag)
+    地址: 0x000000000000ddb0-ddfc (0x4c bytes)
+    源码行: 153
+
+### expiresTagWriteInto
+    int expiresTagWriteInto(uint8_t ** dst, expiresTag tag)
+    地址: 0x000000000000de00-de42 (0x42 bytes)
+    源码行: 163
+
+### tokenTagWriteInto
+    int tokenTagWriteInto(uint8_t ** dst, tokenTag tag)
+    地址: 0x000000000000de50-de81 (0x31 bytes)
+    源码行: 173
+
+### hashTagWriteInto
+    int hashTagWriteInto(uint8_t ** dst, hashTag tag)
+    地址: 0x000000000000de90-dec1 (0x31 bytes)
+    源码行: 183
+
+### headWriteInto
+    int headWriteInto(uint8_t ** dst, header head)
+    地址: 0x000000000000ded0-def9 (0x29 bytes)
+    源码行: 191
+
+### encryptTagRead
+    int encryptTagRead(uint8_t * src, encryptTag * tag)
+    地址: 0x000000000000df00-df92 (0x92 bytes)
+    源码行: 197
+
+### dataTagRead
+    int dataTagRead(uint8_t * src, dataTag * tag)
+    地址: 0x000000000000dfa0-dfee (0x4e bytes)
+    源码行: 216
+
+### expiresTagRead
+    int expiresTagRead(uint8_t * src, expiresTag * tag)
+    地址: 0x000000000000dff0-e049 (0x59 bytes)
+    源码行: 227
+
+### tokenTagRead
+    int tokenTagRead(uint8_t * src, tokenTag * tag)
+    地址: 0x000000000000e050-e098 (0x48 bytes)
+    源码行: 238
+
+### hashTagRead
+    int hashTagRead(uint8_t * src, hashTag * tag)
+    地址: 0x000000000000e0a0-e0e8 (0x48 bytes)
+    源码行: 249
+
+### getExpires
+    int64_t getExpires(expiresTag expiresTag, encryptTag encryptTag, uint8_t * key)
+    地址: 0x000000000000e0f0-e13d (0x4d bytes)
+    源码行: 259
+
+### getData
+    int getData(encryptTag encryptTag, uint8_t * key, uint8_t * src, size_t size, dataTag * dataTag)
+    地址: 0x000000000000e140-e160 (0x20 bytes)
+    源码行: 277
+
+---
+
+## 源文件: (unknown)
+
+### (anonymous)
+    void (anonymous)()
+
+### (anonymous)
+    void (anonymous)()
+
+### (anonymous)
+    void (anonymous)(v8::MaybeLocal<v8::String> * this)
+    源码行: 10807
+
+### (anonymous)
+    void (anonymous)(v8::MaybeLocal<v8::Object> * this)
+    源码行: 10807
+
+### (anonymous)
+    void (anonymous)(const Nan::FunctionCallbackInfo<v8::Value> * this)
+
+### (anonymous)
+    void (anonymous)(const v8::FunctionCallbackInfo<v8::Value> * this)
+    源码行: 11280
+
+### (anonymous)
+    void (anonymous)(const Nan::FunctionCallbackInfo<v8::Value> * this)
+
+### (anonymous)
+    void (anonymous)(const v8::FunctionCallbackInfo<v8::Value> * this, int i)
+    源码行: 11239
+
+### (anonymous)
+    void (anonymous)(const Nan::FunctionCallbackInfo<v8::Value> * this, int i)
+
+### (anonymous)
+    void (anonymous)(v8::Isolate * isolate, int index)
+
+### (anonymous)
+    void (anonymous)(const v8::Maybe<long long> * this)
+
+### (anonymous)
+    void (anonymous)(const v8::Maybe<long long> * this)
+
+### (anonymous)
+    void (anonymous)(const Nan::FunctionCallbackInfo<v8::Value> * this)
+
+### (anonymous)
+    void (anonymous)(const v8::FunctionCallbackInfo<v8::Value> * this)
+    源码行: 11286
+
+### (anonymous)
+    void (anonymous)(const v8::Local<v8::Object> * this)
+
+### (anonymous)
+    void (anonymous)(v8::ReturnValue<v8::Value> * this, const v8::Local<v8::Object> handle)
+    源码行: 11133
+
+### (anonymous)
+    void (anonymous)(Nan::ReturnValue<v8::Value> * this, const v8::Local<v8::Object> & handle)
+
+### (anonymous)
+    void (anonymous)(v8::ReturnValue<v8::Value> * this)
+    源码行: 11227
+
+### (anonymous)
+    void (anonymous)(Nan::HandleScope * this)
+
+### (anonymous)
+    void (anonymous)(Nan::HandleScope * this)
+
+### (anonymous)
+    void (anonymous)(v8::MaybeLocal<v8::Function> * this)
+    源码行: 10807
+
+### (anonymous)
+    void (anonymous)(v8::EscapableHandleScope * this, v8::Local<v8::Int32> value)
+
+### (anonymous)
+    void (anonymous)(v8::EscapableHandleScope * this)
+
+### (anonymous)
+    void (anonymous)(v8::EscapableHandleScope * this)
+
+### (anonymous)
+    void (anonymous)(v8::MaybeLocal<v8::Int32> * this)
+    源码行: 10807
+
+### (anonymous)
+    void (anonymous)(v8::EscapableHandleScope * this, v8::Local<v8::Object> value)
+
+### (anonymous)
+    void (anonymous)(v8::Isolate * isolate, v8::Value * that)
+    源码行: 10781
+
+### (anonymous)
+    void (anonymous)(v8::Isolate * isolate, v8::Local<v8::Value> that)
+    源码行: 10766
+
+### (anonymous)
+    void (anonymous)(const v8::Local<v8::Value> * this)
+
+### (anonymous)
+    void (anonymous)(v8::EscapableHandleScope * this, v8::Local<v8::FunctionTemplate> value)
+
+### (anonymous)
+    void (anonymous)(const v8::FunctionCallbackInfo<v8::Value> * this)
+    源码行: 11274
+
+### (anonymous)
+    void (anonymous)(v8::Object * this, int index)
+    源码行: 11412
+
+### (anonymous)
+    void (anonymous)(v8::internal::Address heap_object_ptr, int offset)
+
+### (anonymous)
+    void (anonymous)(v8::internal::Address heap_object_ptr, int offset)
+
+### (anonymous)
+    void (anonymous)(const v8::internal::Address obj)
+
+### (anonymous)
+    void (anonymous)()
+
+### (anonymous)
+    void (anonymous)(v8::internal::Address addr)
+
+### (anonymous)
+    void (anonymous)(v8::internal::Address heap_object_ptr, int offset)
+
+### (anonymous)
+    void (anonymous)(v8::internal::Address heap_object_ptr, int offset)
+
+### (anonymous)
+    void (anonymous)(v8::internal::Address heap_object_ptr, uint32_t value)
+
+### (anonymous)
+    void (anonymous)(Nan::FunctionCallbackInfo<v8::Value> * this, const v8::FunctionCallbackInfo<v8::Value> & info, v8::Local<v8::Value> data)
+
+### (anonymous)
+    void (anonymous)(Nan::FunctionCallbackInfo<v8::Value> * this, const v8::FunctionCallbackInfo<v8::Value> & info, v8::Local<v8::Value> data)
+
+### _Z12CreateResultiPhj.cold.1
+    void _Z12CreateResultiPhj.cold.1()
+    地址: 0x000000000000e8b0-e8d3 (0x23 bytes)
+
+### (anonymous)
+    void (anonymous)(void )
+    地址: 0x0000000000002920-292e (0xe bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void , void )
+    地址: 0x0000000000003db0-3eb2 (0x102 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void , void )
+    地址: 0x0000000000003ec0-3fd1 (0x111 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void , void )
+    地址: 0x00000000000041b0-42a6 (0xf6 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void , void )
+    地址: 0x00000000000042b0-43b5 (0x105 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x0000000000007480-756e (0xee bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x0000000000007f90-7fdd (0x4d bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x0000000000007fe0-8011 (0x31 bytes)
+
+### (anonymous)
+    void (anonymous)(void )
+    地址: 0x0000000000008f70-90be (0x14e bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x00000000000090c0-90db (0x1b bytes)
+
+### (anonymous)
+    void (anonymous)(void , void )
+    地址: 0x00000000000090e0-9115 (0x35 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x0000000000009120-9213 (0xf3 bytes)
+
+### (anonymous)
+    void (anonymous)(void )
+    地址: 0x0000000000009220-922b (0xb bytes)
+
+### (anonymous)
+    void (anonymous)(void )
+    地址: 0x0000000000009230-9271 (0x41 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void )
+    地址: 0x000000000000a4f0-a505 (0x15 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void , void )
+    地址: 0x000000000000a620-a726 (0x106 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void , void )
+    地址: 0x000000000000a730-a86f (0x13f bytes)
+
+### (anonymous)
+    void (anonymous)(void , void )
+    地址: 0x000000000000d260-d26e (0xe bytes)
+
+### (anonymous)
+    void (anonymous)(void )
+    地址: 0x000000000000d270-d36d (0xfd bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x000000000000d370-d3ab (0x3b bytes)
+
+### (anonymous)
+    void (anonymous)(void , void )
+    地址: 0x000000000000d3b0-d402 (0x52 bytes)
+
+### (anonymous)
+    void (anonymous)(void , void , void )
+    地址: 0x000000000000d410-d638 (0x228 bytes)
+
+---
+
+## 源文件: nan.h
+
+### CopyBuffer
+    Nan::MaybeLocal<v8::Object> CopyBuffer(const char * data, uint32_t size)
+    源码行: 925
+
+### ThrowTypeError
+    void ThrowTypeError(const char * msg)
+    地址: 0x0000000000001e60-1ee8 (0x88 bytes)
+    源码行: 895
+
+### (anonymous)
+    void (anonymous)(Nan::HandleScope * this)
+    源码行: 444
+
+### (anonymous)
+    void (anonymous)(Nan::HandleScope * this)
+    源码行: 444
+
+---
+
+## 源文件: nan_callbacks_12_inl.h
+
+### FunctionCallbackWrapper
+    void FunctionCallbackWrapper(const v8::FunctionCallbackInfo<v8::Value> & info)
+    地址: 0x00000000000021c0-22b0 (0xf0 bytes)
+    源码行: 183
+
+---
+
+## 源文件: nan_converters.h
+
+### To<v8::Int32>
+    Nan::imp::ToFactoryBase<v8::Int32>::return_t To<v8::Int32>(v8::Local<v8::Value> val)
+    源码行: 61
+
+---
+
+## 源文件: nan_converters_43_inl.h
+
+### (anonymous)
+    void (anonymous)(v8::Local<v8::Value> val)
+    源码行: 27
+
+---
+
+## 源文件: nan_implementation_12_inl.h
+
+### (anonymous)
+    void (anonymous)()
+    源码行: 191
+
+### (anonymous)
+    void (anonymous)(const char * value, int length)
+    源码行: 281
+
+### (anonymous)
+    void (anonymous)(int32_t value)
+    地址: 0x0000000000001f90-201a (0x8a bytes)
+    源码行: 166
+
+### (anonymous)
+    void (anonymous)(Nan::FunctionCallback callback, v8::Local<v8::Value> data, v8::Local<v8::Signature> signature)
+    地址: 0x0000000000002020-21b9 (0x199 bytes)
+    源码行: 119
+
+---
+
+## 源文件: nan_maybe_43_inl.h
+
+### Set
+    Nan::Maybe<bool> Set(v8::Local<v8::Object> obj, v8::Local<v8::Value> key, v8::Local<v8::Value> value)
+    源码行: 74
+
+### NewInstance
+    Nan::MaybeLocal<v8::Object> NewInstance(v8::Local<v8::ObjectTemplate> h)
+    源码行: 58
+
+---
+
+## 源文件: nan_new.h
+
+### To<v8::Int32>
+    v8::Local<v8::Int32> To<v8::Int32>(v8::Local<v8::Integer> i)
+    源码行: 27
+
+### New<v8::Object>
+    Nan::imp::FactoryBase<v8::Object>::return_t New<v8::Object>()
+    源码行: 201
+
+### New<v8::String, const char *>
+    Nan::imp::MaybeFactoryBase<v8::String>::return_t New<v8::String, const char *>(const char * arg0)
+    源码行: 207
+
+### New
+    Nan::imp::MaybeFactoryBase<v8::String>::return_t New(const char * value)
+    源码行: 312
+
+### New<v8::Int32, int>
+    Nan::imp::IntegerFactory<v8::Int32>::return_t New<v8::Int32, int>(int arg0)
+    源码行: 207
+
+### New
+    Nan::imp::IntegerFactory<v8::Int32>::return_t New(int32_t value)
+    源码行: 276
+
+### New<v8::FunctionTemplate>
+    Nan::imp::FactoryBase<v8::FunctionTemplate>::return_t New<v8::FunctionTemplate>(Nan::FunctionCallback callback, v8::Local<v8::Value> data)
+    源码行: 237
+
+---
+
+## 源文件: v8.h
+
+### Undefined
+    v8::Local<v8::Primitive> Undefined(v8::Isolate * isolate)
+    源码行: 11977
+
+---
+
+## 结构体（55 个）
+
+## 源文件: AesInterns.h
+
+### _AESContext_  (0x0200 bytes)
+    uint32_t[60] AesEncKey +0x0
+    uint32_t[60] AesDecKey +0xf0
+    uint32_t[4] InitialVector +0x1e0
+    uint32_t iFeedBackSz +0x1f0
+    uint32_t iKeyLength +0x1f4
+    uint32_t iNk +0x1f8
+    uint32_t iNr +0x1fc
+
+## 源文件: EfAes.h
+
+### _AesCtx_  (0x0200 bytes)
+    unsigned char[512] space +0x0
+
+### _AesCtx_  (0x0200 bytes)
+    unsigned char[512] space +0x0
+
+### _AesCtx_  (0x0200 bytes)
+    unsigned char[512] space +0x0
+
+## 源文件: aes.h
+
+### (anonymous)  (0x0408 bytes)
+    unsigned long[64] erk +0x0
+    unsigned long[64] drk +0x200
+    int nr +0x400
+
+## 源文件: md5.h
+
+### (anonymous)  (0x58 bytes)
+    unsigned int[2] count +0x0
+    unsigned int[4] state +0x8
+    unsigned char[64] buffer +0x18
+
+### (anonymous)  (0x58 bytes)
+    unsigned int[2] count +0x0
+    unsigned int[4] state +0x8
+    unsigned char[64] buffer +0x18
+
+## 源文件: parser.h
+
+### (anonymous)  (0x48 bytes)
+    int length +0x0
+    uint8_t * data +0x8
+    int useKey +0x10
+    uint8_t[16] key +0x14
+    int64_t expires +0x28
+    int useToken +0x30
+    uint8_t * token +0x38
+    size_t tokenLen +0x40
+
+### (anonymous)  (0x48 bytes)
+    int length +0x0
+    uint8_t * data +0x8
+    int useKey +0x10
+    uint8_t[16] key +0x14
+    int64_t expires +0x28
+    int useToken +0x30
+    uint8_t * token +0x38
+    size_t tokenLen +0x40
+
+## 源文件: sha1.h
+
+### SHA1Context  (0x68 bytes)
+    unsigned int[5] Message_Digest +0x0
+    unsigned int Length_Low +0x14
+    unsigned int Length_High +0x18
+    unsigned char[64] Message_Block +0x1c
+    int Message_Block_Index +0x5c
+    int Computed +0x60
+    int Corrupted +0x64
+
+### SHA1Context  (0x68 bytes)
+    unsigned int[5] Message_Digest +0x0
+    unsigned int Length_Low +0x14
+    unsigned int Length_High +0x18
+    unsigned char[64] Message_Block +0x1c
+    int Message_Block_Index +0x5c
+    int Computed +0x60
+    int Corrupted +0x64
+
+## 源文件: struct.h
+
+### (anonymous)  (0x06 bytes)
+    char[4] flag +0x0
+    uint16_t vesion +0x4
+
+### (anonymous)  (0x28 bytes)
+    int length +0x0
+    uint16_t tagType +0x4
+    char EncryptType +0x6
+    short PlansLength +0x8
+    char * Plans +0x10
+    short KeyLength +0x18
+    char * Key +0x20
+
+### (anonymous)  (0x12 bytes)
+    uint16_t tagType +0x0
+    uint8_t[16] token +0x2
+
+### (anonymous)  (0x10 bytes)
+    uint16_t tagType +0x0
+    int length +0x4
+    char * data +0x8
+
+### (anonymous)  (0x20 bytes)
+    uint16_t tagType +0x0
+    int64_t expires +0x8
+    uint8_t[16] expiresData +0x10
+
+### (anonymous)  (0x12 bytes)
+    uint16_t tagType +0x0
+    uint8_t[16] hash +0x2
+
+### (anonymous)  (0x10 bytes)
+    uint16_t tagType +0x0
+    int length +0x4
+    char * data +0x8
+
+### (anonymous)  (0x28 bytes)
+    int length +0x0
+    uint16_t tagType +0x4
+    char EncryptType +0x6
+    short PlansLength +0x8
+    char * Plans +0x10
+    short KeyLength +0x18
+    char * Key +0x20
+
+### (anonymous)  (0x06 bytes)
+    char[4] flag +0x0
+    uint16_t vesion +0x4
+
+### (anonymous)  (0x28 bytes)
+    int length +0x0
+    uint16_t tagType +0x4
+    char EncryptType +0x6
+    short PlansLength +0x8
+    char * Plans +0x10
+    short KeyLength +0x18
+    char * Key +0x20
+
+### (anonymous)  (0x10 bytes)
+    uint16_t tagType +0x0
+    int length +0x4
+    char * data +0x8
+
+### (anonymous)  (0x20 bytes)
+    uint16_t tagType +0x0
+    int64_t expires +0x8
+    uint8_t[16] expiresData +0x10
+
+### (anonymous)  (0x12 bytes)
+    uint16_t tagType +0x0
+    uint8_t[16] token +0x2
+
+### (anonymous)  (0x12 bytes)
+    uint16_t tagType +0x0
+    uint8_t[16] hash +0x2
+
+### (anonymous)  (0x06 bytes)
+    char[4] flag +0x0
+    uint16_t vesion +0x4
+
+## 源文件: (unknown)
+
+### __va_list_tag  (0x18 bytes)
+    unsigned int gp_offset +0x0
+    unsigned int fp_offset +0x4
+    void * overflow_arg_area +0x8
+    void * reg_save_area +0x10
+
+## 源文件: _stdio.h
+
+### __sFILE  (0x98 bytes)
+    unsigned char * _p +0x0
+    int _r +0x8
+    int _w +0xc
+    short _flags +0x10
+    short _file +0x12
+    __sbuf _bf +0x18
+    int _lbfsize +0x28
+    void * _cookie +0x30
+    int (*)(void *) _close +0x38
+    int (*)(void *, char *, int) _read +0x40
+    fpos_t (*)(void *, fpos_t, int) _seek +0x48
+    int (*)(void *, const char *, int) _write +0x50
+    __sbuf _ub +0x58
+    __sFILEX * _extra +0x68
+    int _ur +0x70
+    unsigned char[3] _ubuf +0x74
+    unsigned char[1] _nbuf +0x77
+    __sbuf _lb +0x78
+    int _blksize +0x88
+    fpos_t _offset +0x90
+
+### __sbuf  (0x10 bytes)
+    unsigned char * _base +0x0
+    int _size +0x8
+
+## 源文件: compressed_pair.h
+
+### __compressed_pair_elem<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::__rep, 0, false>  (0x18 bytes)
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::__rep __value_ +0x0
+
+## 源文件: stdlib.h
+
+### (anonymous)  (0x08 bytes)
+    int quot +0x0
+    int rem +0x4
+
+### (anonymous)  (0x10 bytes)
+    long quot +0x0
+    long rem +0x8
+
+### (anonymous)  (0x10 bytes)
+    long long quot +0x0
+    long long rem +0x8
+
+## 源文件: string
+
+### __rep  (0x18 bytes)
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::__rep::union   +0x0
+
+### __long  (0x18 bytes)
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::size_type __cap_ +0x0
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::size_type __size_ +0x8
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::pointer __data_ +0x10
+
+### __short  (0x18 bytes)
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::__short::union   +0x0
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::value_type[23] __data_ +0x1
+
+### __raw  (0x18 bytes)
+    std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >::size_type[3] __words +0x0
+
+## 源文件: time.h
+
+### tm  (0x38 bytes)
+    int tm_sec +0x0
+    int tm_min +0x4
+    int tm_hour +0x8
+    int tm_mday +0xc
+    int tm_mon +0x10
+    int tm_year +0x14
+    int tm_wday +0x18
+    int tm_yday +0x1c
+    int tm_isdst +0x20
+    long tm_gmtoff +0x28
+    char * tm_zone +0x30
+
+## 源文件: type_traits
+
+### integral_constant<bool, true>  (0x01 bytes)
+    const bool value
+
+### integral_constant<bool, false>  (0x01 bytes)
+    const bool value
+
+## 源文件: v8.h
+
+### JitCodeEvent  (0x50 bytes)
+    v8::JitCodeEvent::EventType type +0x0
+    v8::JitCodeEvent::CodeType code_type +0x4
+    void * code_start +0x8
+    size_t code_len +0x10
+    v8::Local<v8::UnboundScript> script +0x18
+    void * user_data +0x20
+    v8::JitCodeEvent::wasm_source_info_t * wasm_source_info +0x28
+    v8::JitCodeEvent::union   +0x30
+    v8::Isolate * isolate +0x48
+
+### wasm_source_info_t  (0x20 bytes)
+    const char * filename +0x0
+    size_t filename_size +0x8
+    const v8::JitCodeEvent::line_info_t * line_number_table +0x10
+    size_t line_number_table_size +0x18
+
+### line_info_t  (0x18 bytes)
+    size_t offset +0x0
+    size_t pos +0x8
+    v8::JitCodeEvent::PositionType position_type +0x10
+
+### name_t  (0x10 bytes)
+    const char * str +0x0
+    size_t len +0x8
+
+### CreateParams  (0x90 bytes)
+    v8::JitCodeEventHandler code_event_handler +0x0
+    v8::ResourceConstraints constraints +0x8
+    v8::StartupData * snapshot_blob +0x40
+    v8::CounterLookupCallback counter_lookup_callback +0x48
+    v8::CreateHistogramCallback create_histogram_callback +0x50
+    v8::AddHistogramSampleCallback add_histogram_sample_callback +0x58
+    v8::ArrayBuffer::Allocator * array_buffer_allocator +0x60
+    std::__1::shared_ptr<v8::ArrayBuffer::Allocator> array_buffer_allocator_shared +0x68
+    const intptr_t * external_references +0x78
+    bool allow_atomics_wait +0x80
+    bool only_terminate_in_safe_scope +0x81
+    int embedder_wrapper_type_index +0x84
+    int embedder_wrapper_object_index +0x88
+
+### RegisterState  (0x20 bytes)
+    void * pc +0x0
+    void * sp +0x8
+    void * fp +0x10
+    void * lr +0x18
+
+### SampleInfo  (0x20 bytes)
+    size_t frames_count +0x0
+    v8::StateTag vm_state +0x8
+    void * external_callback_entry +0x10
+    void * top_context +0x18
+
+### TraceSummary  (0x10 bytes)
+    double time +0x0
+    size_t allocated_size +0x8
+
+### JSEntryStubs  (0x30 bytes)
+    v8::JSEntryStub js_entry_stub +0x0
+    v8::JSEntryStub js_construct_entry_stub +0x10
+    v8::JSEntryStub js_run_microtasks_entry_stub +0x20
+
+### JSEntryStub  (0x10 bytes)
+    v8::MemoryRange code +0x0
+
+### MemoryRange  (0x10 bytes)
+    const void * start +0x0
+    size_t length_in_bytes +0x8
+
+### ModifyCodeGenerationFromStringsResult  (0x10 bytes)
+    bool codegen_allowed +0x0
+    v8::MaybeLocal<v8::String> modified_source +0x8
+
+### NamedPropertyHandlerConfiguration  (0x48 bytes)
+    v8::GenericNamedPropertyGetterCallback getter +0x0
+    v8::GenericNamedPropertySetterCallback setter +0x8
+    v8::GenericNamedPropertyQueryCallback query +0x10
+    v8::GenericNamedPropertyDeleterCallback deleter +0x18
+    v8::GenericNamedPropertyEnumeratorCallback enumerator +0x20
+    v8::GenericNamedPropertyDefinerCallback definer +0x28
+    v8::GenericNamedPropertyDescriptorCallback descriptor +0x30
+    v8::Local<v8::Value> data +0x38
+    v8::PropertyHandlerFlags flags +0x40
+
+### IndexedPropertyHandlerConfiguration  (0x48 bytes)
+    v8::IndexedPropertyGetterCallback getter +0x0
+    v8::IndexedPropertySetterCallback setter +0x8
+    v8::IndexedPropertyQueryCallback query +0x10
+    v8::IndexedPropertyDeleterCallback deleter +0x18
+    v8::IndexedPropertyEnumeratorCallback enumerator +0x20
+    v8::IndexedPropertyDefinerCallback definer +0x28
+    v8::IndexedPropertyDescriptorCallback descriptor +0x30
+    v8::Local<v8::Value> data +0x38
+    v8::PropertyHandlerFlags flags +0x40
+
+### DeserializeInternalFieldsCallback  (0x10 bytes)
+    void (*)(v8::Local<v8::Object>, int, v8::StartupData, void *) callback +0x0
+    void * data +0x8
