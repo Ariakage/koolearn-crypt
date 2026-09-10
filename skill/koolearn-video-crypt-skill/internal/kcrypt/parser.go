@@ -21,6 +21,13 @@ type Context struct {
 	Expires  int64
 	UseToken bool
 	Token    []byte
+
+	// SkipTokenCheck drops the version-2 tokenTag comparison. The token is not
+	// an input to createKey — it only gates the container through the md5 stored
+	// in tokenTag — so skipping the check yields the exact same key whenever the
+	// token is unknown. Set it to degrade gracefully instead of failing with
+	// codeBadToken.
+	SkipTokenCheck bool
 }
 
 // Decrypt mirrors decrypt_parse (0x2540). It walks the tag list, derives the
@@ -113,7 +120,7 @@ func decrypt(container []byte, ctx Context, unpad bool) ([]byte, error) {
 				return nil, errf(codeBadHash, "hash mismatch")
 			}
 		}
-		if tk.tagType != 0 {
+		if tk.tagType != 0 && !ctx.SkipTokenCheck {
 			if md5Sum(ctx.Token) != tk.token {
 				return nil, errf(codeBadToken, "token mismatch")
 			}
@@ -182,6 +189,65 @@ func ContainerExpires(container []byte) (int64, error) {
 		p += n
 	}
 	return 0, errf(codeBadMagic, "no expires tag")
+}
+
+// ContainerTokenHash returns the 16-byte token hash stored in the container's
+// tokenTag — the MD5 of the client's plaintext token (normally the numeric user
+// id). hasToken is false when the container carries no token tag.
+//
+// Like ContainerExpires it only walks the cleartext tag list, so it needs no
+// key and performs no verification. Callers use it to test a candidate token
+// against a cache without the risk of a wrong guess: md5 collisions are
+// impossible here, so a match is exact.
+func ContainerTokenHash(container []byte) (h [16]byte, hasToken bool, err error) {
+	if len(container) < headerLen {
+		return h, false, errf(codeBadMagic, "container shorter than header")
+	}
+	if binary.LittleEndian.Uint32(container[0:4]) != magic {
+		return h, false, errf(codeBadMagic, "bad KEY. magic")
+	}
+
+	p := headerLen
+	for p+2 <= len(container) {
+		var n int
+		switch binary.LittleEndian.Uint16(container[p : p+2]) {
+		case tagToken:
+			if p+tokenTagLen > len(container) {
+				return h, false, errf(codeBadMagic, "truncated token tag")
+			}
+			copy(h[:], container[p+2:p+tokenTagLen])
+			return h, true, nil
+		case tagEncrypt:
+			if p+5 > len(container) {
+				return h, false, errf(codeBadMagic, "truncated encrypt tag")
+			}
+			pl := int(binary.LittleEndian.Uint16(container[p+3 : p+5]))
+			if p+7+pl > len(container) {
+				return h, false, errf(codeBadMagic, "truncated encrypt tag plans")
+			}
+			kl := int(binary.LittleEndian.Uint16(container[p+5+pl : p+7+pl]))
+			n = 7 + pl + kl
+		case tagHash:
+			n = 18
+		case tagExpires:
+			if p+expiresTagLen > len(container) {
+				return h, false, errf(codeBadMagic, "truncated expires tag")
+			}
+			n = expiresTagLen
+		case tagData:
+			if p+6 > len(container) {
+				return h, false, errf(codeBadMagic, "truncated data tag")
+			}
+			n = 6 + int(binary.LittleEndian.Uint32(container[p+2:p+6]))
+		default:
+			return h, false, errf(codeBadMagic, "unknown tag %#04x at %d", binary.LittleEndian.Uint16(container[p:p+2]), p)
+		}
+		if n <= 0 || p+n > len(container) {
+			return h, false, errf(codeBadMagic, "bad tag length %d at %d", n, p)
+		}
+		p += n
+	}
+	return h, false, errf(codeBadMagic, "no token tag")
 }
 
 // Encrypt mirrors encrypt_parse (0x22b0). It always emits version 2 and the

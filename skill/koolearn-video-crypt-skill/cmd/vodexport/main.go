@@ -5,16 +5,26 @@
 // segment key through kcrypt, each segment is AES-128-CBC decrypted with a zero
 // IV, and the concatenated MPEG-TS is remuxed to MP4 with ffmpeg.
 //
+// ffmpeg is only needed for the final remux: when it is not found in PATH the
+// tool degrades to -no-mux and leaves the plaintext .ts in place instead.
+//
 // Usage:
 //
-//	vodexport -token 110607776 -out export \
-//	  ~/Library/Application\ Support/koolearn/koolearn/download
+//	vodexport -out export ~/Library/Application\ Support/koolearn/koolearn/download
+//
+// The token (the client's numeric user id) is optional. By default -token auto
+// recovers it from the client's <data root>/cache/<uid>/ directory by matching
+// its MD5 against the key containers; when it cannot be found the v2 token
+// check is skipped rather than failing, because the container key does not
+// depend on it. Pass -token <uid> to force a value.
 //
 // Examples:
 //
 //	vodexport -list ~/Library/.../download          # inspect what was found
-//	vodexport -token 110607776 -only 6p0f88... ...  # export a single video
-//	vodexport -token 110607776 -jobs 8 -keep-ts ... # keep the plaintext .ts
+//	vodexport -only 6p0f88... ...                   # export a single video
+//	vodexport -jobs 8 -keep-ts ...                  # keep the plaintext .ts
+//	vodexport -no-mux ...                           # .ts only, no ffmpeg needed
+//	vodexport -token 110607776 ...                  # force a known token
 package main
 
 import (
@@ -23,6 +33,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -36,10 +47,11 @@ func main() {
 	var (
 		in        = flag.String("in", "", "download root (may also be the first argument)")
 		out       = flag.String("out", "export", "output directory for the .mp4 files")
-		token     = flag.String("token", "", "client token (the numeric user id); required unless -list")
+		token     = flag.String("token", "auto", "client token (numeric user id), or \"auto\" to recover it from the local cache")
 		jobs      = flag.Int("jobs", 4, "videos to export concurrently")
 		overwrite = flag.Bool("overwrite", false, "re-export videos whose .mp4 already exists")
 		keepTS    = flag.Bool("keep-ts", false, "keep the plaintext .ts next to each .mp4")
+		noMux     = flag.Bool("no-mux", false, "stop at the plaintext .ts (no ffmpeg); output is <id>.ts")
 		list      = flag.Bool("list", false, "list discovered videos and exit")
 		only      = flag.String("only", "", "comma-separated video ids to export (default: all)")
 		quiet     = flag.Bool("q", false, "suppress per-video progress")
@@ -75,8 +87,12 @@ func main() {
 		fmt.Printf("total: %d videos\n", len(videos))
 		return
 	}
-	if *token == "" {
-		fatal("-token is required")
+	// ffmpeg is optional: when it is missing, degrade to -no-mux rather than fail.
+	if !*noMux {
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			fmt.Fprintln(os.Stderr, "warning: ffmpeg not found in PATH; falling back to -no-mux (.ts output)")
+			*noMux = true
+		}
 	}
 	if *jobs < 1 {
 		*jobs = 1
@@ -88,9 +104,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	tok, tokenNote := resolveToken(*token, root, videos)
+
 	fmt.Printf("→ root  : %s\n", root)
 	fmt.Printf("→ output: %s\n", *out)
+	fmt.Printf("→ token : %s\n", tokenNote)
 	fmt.Printf("→ videos: %d (jobs=%d)\n", len(videos), *jobs)
+	if *noMux {
+		fmt.Printf("→ format: .ts (remux skipped)\n")
+	}
 
 	start := time.Now()
 	type outcome struct {
@@ -108,10 +130,11 @@ func main() {
 			defer func() { <-sem }()
 
 			opt := vod.Options{
-				Token:     *token,
+				Token:     tok,
 				OutDir:    *out,
 				Overwrite: *overwrite,
 				KeepTS:    *keepTS,
+				NoMux:     *noMux,
 			}
 			if !*quiet {
 				opt.Logf = func(format string, a ...any) {
@@ -152,6 +175,24 @@ func main() {
 	}
 }
 
+// resolveToken returns the token to export with and a human-readable note
+// describing where it came from. "auto" (or an empty value) asks vod to recover
+// it from the local cache; an empty result is not fatal, because Export skips
+// the v2 token check when the token is unknown.
+func resolveToken(flagVal, root string, videos []vod.Video) (token, note string) {
+	if flagVal != "" && !strings.EqualFold(flagVal, "auto") {
+		return flagVal, flagVal + " (from -token)"
+	}
+	tok, verified, err := vod.ResolveToken(root, videos)
+	if err != nil {
+		return "", "unknown (resolve failed: " + err.Error() + "; v2 token check skipped)"
+	}
+	if verified {
+		return tok, tok + " (auto: matched cache/<uid>)"
+	}
+	return "", "unknown (no cache match; v2 token check skipped — decryption unaffected)"
+}
+
 // filter keeps the videos named in only (comma separated); an empty filter
 // keeps everything.
 func filter(videos []vod.Video, only string) []vod.Video {
@@ -175,7 +216,7 @@ func filter(videos []vod.Video, only string) []vod.Video {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "vodexport — decrypt koolearn cached VOD downloads into MP4\n\n")
-	fmt.Fprintf(os.Stderr, "Usage:\n  vodexport -token <id> [flags] <download root>\n\nFlags:\n")
+	fmt.Fprintf(os.Stderr, "Usage:\n  vodexport [flags] <download root>\n\nFlags:\n")
 	flag.PrintDefaults()
 }
 
