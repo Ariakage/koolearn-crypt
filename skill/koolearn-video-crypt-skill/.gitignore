@@ -1,0 +1,19 @@
+# 编译产物
+/bin/
+/hlsget
+/dist/
+*.exe
+/harness/oracle
+
+# 下载输出与中间产物
+*.parts/
+*.ts
+*.mp4
+!testdata/*.ts
+/export/
+
+# Go
+vendor/
+
+# macOS
+.DS_Store
