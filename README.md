@@ -19,7 +19,7 @@
   - [3.1 HLS 视频下载（koolearn-download + aria2c）](#31-hls-视频下载koolearn-download--aria2c)
   - [3.2 普通文件下载（Electron will-download）](#32-普通文件下载electron-will-download)
 - [4. 下载存储位置与目录结构](#4-下载存储位置与目录结构)
-- [5. 私有加密方案（koolearn-decrypt）](#5-私有加密方案koolearn-decrypt)
+- [5. 私有加密与 DRM 方案（koolearn-decrypt）](#5-私有加密与-drm-方案koolearn-decrypt)
   - [5.1 模块与 API](#51-模块与-api)
   - [5.2 `KEY.` 容器格式](#52-key-容器格式)
   - [5.3 密钥派生](#53-密钥派生)
@@ -27,6 +27,10 @@
   - [5.5 PLANS_DIC 字典与跳转表](#55-plans_dic-字典与跳转表)
   - [5.6 密码原语清单](#56-密码原语清单)
   - [5.7 渲染层调用链（定制 hls.js）](#57-渲染层调用链定制-hlsjs)
+  - [5.8 `koolearn-m3u8-parser` 解析细节](#58-koolearn-m3u8-parser-解析细节)
+  - [5.9 WASM 解密后端（第二条解密路径）](#59-wasm-解密后端第二条解密路径)
+  - [5.10 koolearn DRM 全链路原理](#510-koolearn-drm-全链路原理)
+  - [5.11 DRM 的去除与绕过](#511-drm-的去除与绕过)
 - [6. 播放流程（local.m3u8）](#6-播放流程localm3u8)
 - [7. 导出为 MP4 的可行性评估](#7-导出为-mp4-的可行性评估)
 - [8. 逆向工程记录（符号 / 地址速查）](#8-逆向工程记录符号--地址速查)
@@ -245,7 +249,7 @@ path = join(t, n);
 
 ---
 
-## 5. 私有加密方案（koolearn-decrypt）
+## 5. 私有加密与 DRM 方案（koolearn-decrypt）
 
 > 对 `node_modules/koolearn-decrypt/build/Release/decrypt.node`（Mach-O x86_64，**符号未 strip**）的完整逆向结论。
 >
@@ -408,7 +412,229 @@ if (l.isKoolearnET)
 | @6007059 | `invalidM3u8`：`KOOLEARN_M3U8_INVALID_TIME \|\| 3e5`（**5 分钟过期**） |
 | @6545814 | `selectDirectory`（下载路径选择对话框） |
 
-> 另存在 **WASM 解密路径**（备用），主路径为上述原生 `decrypt.node`。
+> 另存在 **WASM 解密路径**（备用），即纯浏览器下的第二条解密后端，与上述原生 `decrypt.node` **并存**；详见 §5.9。
+
+### 5.8 `koolearn-m3u8-parser` 解析细节
+
+`koolearn-m3u8-parser` 是 **[videojs/m3u8-parser](https://github.com/videojs/m3u8-parser) v4.0.0 的 fork**（`package.json` 声明 `name=koolearn-m3u8-parser`、`version=4.0.0`、`license=Apache-2.0`），被 `koolearn-download` 以 `"koolearn-m3u8-parser": "^4.0.0"` 依赖。fork 在原版基础上新增了 **5 个自定义标签**与一个 **URI 相对化改写器** `parse-relative.js`。
+
+**自定义标签（`src/parse-stream.js`）：**
+
+| 标签 | `tagType` / `type` | 落地字段 | 位置 |
+|---|---|---|---|
+| `#ZEN-TOTAL-DURATION:<int>` | `tagType:'totalduration'`（`type:'tag'`） | `manifest.totalDuration` | L153 |
+| `#EXT-X-XDF-VERSION:<str>` | `type:'xdf'`、`tagType:'version'` | `manifest.xdf.version` | L424 |
+| `#EXT-X-XDF-KE:<str>` | `tagType:'ke'` | `manifest.xdf.ke` | L424 |
+| `#EXT-X-XDF-IG-CT:<str>` | `tagType:'igct'` | `manifest.xdf.igct` | L424 |
+| `#EXT-X-XDF-IG-ET:<str>` | `tagType:'iget'` | `manifest.xdf.iget` | L424 |
+
+**Parser handler（`src/parser.js`）：**
+
+- `totalduration()`（L283）：`this.manifest.totalDuration = entry.duration`；非法（`NaN` / 负数）时仅 `warn` 并忽略。
+- `xdf()`（L343）：惰性创建 `manifest.xdf = {}`，再写入 `manifest.xdf[entry.tagType] = entry[entry.tagType]`。
+
+> 注意：标签名是 `#EXT-X-XDF-IG-CT` / `#EXT-X-XDF-IG-ET`，但 tagType 分别为 `igct` / `iget`（**不是** `ig-et`）。
+
+**`parse-relative.js`（fork 新增，130 行；文件头注释误抄为 `@file m3u8/parse-stream.js`）：**
+
+`ParseRelative` 是一个逐行、上下文无关的重写流，`push(line)` 三条规则：
+
+1. **URI 行（非 `#` 开头）**：若以 `http` 开头，则去掉 `?` 之后的查询串、再取最后一个 `/` 之后的文件名，做**本地文件名化**；否则原样透传。
+
+```js
+if (line[0] !== '#') {
+  let result = line;
+  if (line.startsWith('http')) {
+    let end = line.indexOf('?'); if (end > 0) result = result.slice(0, end);
+    let start = result.lastIndexOf('/'); if (start > 0) result = result.slice(start + 1);
+  }
+  this.trigger('data', result);
+  return;
+}
+```
+
+2. **`#EXTINF`**：规整为 `#EXTINF:<dur>,<title>`。
+
+3. **`#EXT-X-KEY`**：把 `URI="..."` 整体改写为指向本地 `vodkey.bin`：
+
+```js
+this.trigger('data', line.replace(/(?=URI=").*"/, `URI="${this.keyName}"`));
+```
+
+其余行原样透传。
+
+**`Parser.relative(chunk, keyName, callback)`（`parser.js` L373）：**
+
+```js
+relative(chunk, keyName, callback) {
+  const ls = new LineStream();
+  const ps = new ParseRelative(keyName);
+  let result = '';
+  ps.on('data', entry => {
+    result += entry + '\n';
+    if (entry == '#EXT-X-ENDLIST') callback(result);   // 直到 ENDLIST 才回调
+  });
+  ls.push(chunk);
+  return ps;
+}
+```
+
+即把整份原始 playlist 过一遍 `ParseRelative`，遇到 `#EXT-X-ENDLIST` 时把累计文本作为 `local.m3u8` 内容回调返回。
+
+**消费点（`koolearn-download/src/hlsDownloader.ts` L386-439）：**
+
+```ts
+var parser = new m3u8Parser.Parser();
+parser.push(body); parser.end();
+let manifest = parser.manifest;
+let duration = manifest.totalDuration;
+if (!duration) duration = _sumby(manifest.segments, i => (<any>i).duration);  // 兜底：逐段累加
+if (duration) this.emit(downloadEvents.DURATION, duration);
+if (manifest.xdf) this.emit(downloadEvents.XDF, manifest.xdf);               // XDF 元数据透传
+for (let i = 0; i < segments.length; i++) {
+  let segment = segments[i];
+  if (!m3u8.key) m3u8.key = { index: -1, url: url.resolve(turl, !segment.key ? '' : segment.key.uri), completed: !segment.key };
+  let suri = url.resolve(turl, segment.uri);
+  m3u8.segments.push({ index: i, url: suri, completed: false });
+}
+```
+
+**用途小结：** `#ZEN-TOTAL-DURATION` 让下载端无需累加 `#EXTINF` 即可拿到总时长（缺失时才回落逐段求和）；`#EXT-X-XDF-*` 承载 XDF / DRM 元数据并在下载完成后 `emit`，供上层 DRM 与时效逻辑使用（见 §5.10）；`parse-relative.js` 则是 §6「播放阶段」生成 `local.m3u8` 的实现基础。
+
+**调用点：** `createMediaUrl` 读入 `index.m3u8` 后调用 `(new Parser()).relative(r, "vodkey.bin", cb)`，把结果写为 `local.m3u8`，并以 `file:///${local.m3u8}?t=${Date.now()}` 返回（见 §6）。
+
+### 5.9 WASM 解密后端（第二条解密路径）
+
+除 §5.7 的 Electron 原生 `decrypt.node` 外，渲染包内还编入了一个 **Emscripten（wasm2js）模块**，导出 `_decrypt`，构成**纯浏览器**可用的第二条解密路径。两套后端**并存**，由运行环境 / 分支决定走哪条。
+
+**模块识别：**
+
+- Emscripten 配置含 `isWasm2js:!0`（编译为 JS 而非 `.wasm`）。
+- 导出校验：`qs(void 0!==(e=vl=e.exports).decrypt,"missing Wasm export: decrypt")`；另一实例为 `Rl(void 0!==(e=Au=e.exports).decrypt,...)`。
+- 导出挂载（arity = 7）：`xs._decrypt = Xs("decrypt", 7)` 与 `_l._decrypt = Ql("decrypt", 7)`。
+
+**双实例（按 ET 分流）：**
+
+| 实例 | 用途 |
+|---|---|
+| `xs` | `KOOLEARN-ET`（ET 变体） |
+| `_l` | 非 ET（普通 `KOOLEARN`） |
+
+**唯一真实调用点**（`loadKeyHTTP.onSuccess`，bundle.js @~4769882）：
+
+```js
+if ((A = ("KOOLEARN-ET" === l ? xs : _l)._decrypt(
+        h.byteOffset, u.byteLength,   // keyPtr, keyLen
+        d.byteOffset, d.byteLength,   // tokenPtr, tokenLen
+        f,                            // timestamp
+        p,                            // isET (0/1)
+        c.byteOffset                  // outPtr
+     )) < 0) { /* 失败 */ }
+// 成功：明文 = c.slice(0, A)
+```
+
+其中 `isET = ("KOOLEARN-ET" === l) ? 1 : 0`，输出缓冲 `c` 取前 `A` 字节。
+
+**导出签名（推断）：**
+
+```
+int _decrypt(keyPtr, keyLen, tokenPtr, tokenLen, timestamp, isET, outPtr)
+```
+
+返回**明文长度**（`<0` 表示失败），明文写入 `outPtr`。
+
+**内存辅助导出：** `_arrayToHeap` / `_stringToHeap` / `_freeArray` / `Utf8ArrayToStr`，以及多密钥展开 `createMuitKeys`。
+
+**与 Electron 路径的对应关系：**
+
+| 维度 | Electron 原生（§5.7） | WASM（本节） |
+|---|---|---|
+| 调用 | `remote.require("koolearn-decrypt").decrypt(c,d,h,p)` | `(ET?xs:_l)._decrypt(keyPtr,keyLen,tokenPtr,tokenLen,ts,isET,outPtr)` |
+| ET 盐 | `Buffer.from("5wqPBk89IkGBxXZy")` | 由 `isET` 内部处理 |
+| 返回值 | `f.result`（Buffer，`f.code<0` 失败） | 明文长度 `A`（`<0` 失败） |
+| 适用环境 | Electron 渲染层（有 Node / 原生模块） | 纯浏览器（无原生模块） |
+
+**相关错误码：** `Error_Not_Support_WebAssembly`（`"Browser not support WebAssembly"` / `"浏览器不支持WebAssembly"`）、`Error_Koolearn_Bin_Decrypt_Error`（`"Koolearn key.bin decrypt fail"` / `"Koolearn秘钥获取失败"`）。
+
+> ⚠️ **易混淆点**：bundle 中另有一处 `.decrypt(u,c,d,h,g,p)`（@~596251）属于 **hls.js 自带的 JS AES 解密 worker**（`self.onmessage`、`STEP=32000`），与本 WASM 无关；WASM 的 JS 侧导出名是 **`_decrypt`（带下划线）**，按字面 `.decrypt(` 搜不到调用点。
+
+### 5.10 koolearn DRM 全链路原理
+
+koolearn 的「DRM」并非标准 Widevine / FairPlay，而是一套**自定义 HLS 加密 + 私有密钥派生 + 本地时效**的轻量方案，运行于定制 hls.js 与 `@avsdk/xdf-player`（`xdfplayer-drm-min.js` / `xdfplayer-hls` / `xdfplayer-flv-min.js`，v1.9.0）之上。可按五层 + 一层时效理解：
+
+**① 清单层（自定义 METHOD）：** playlist 使用非标准 `#EXT-X-KEY:METHOD=KOOLEARN` 与 `METHOD=KOOLEARN-ET`。定制 hls.js 在解析时把它们**归一化**为内部 `AES-128`，同时打标记：
+
+```js
+["AES-128","SAMPLE-AES","SAMPLE-AES-CENC","KOOLEARN","KOOLEARN-ET"].indexOf(V) >= 0
+var Q = ("KOOLEARN-ET" === V), H = ("KOOLEARN" === V);
+g.method = (H || Q) ? "AES-128" : V;
+g.isKoolearn = H; g.isKoolearnET = Q;
+```
+
+**② 密钥下发层：** 渲染层通过 `POST /ci/video/get/hls/plus/key/v1`（`body = { sid, m3u8Versions }`，函数 `getPlusBins`）向服务端换取密钥容器 `KEY.`；请求携带 `auth_key=<unix秒>`。
+
+**③ 密钥派生层：** 拿到 `KEY.` 容器密文后，经 §5.2 / §5.3 的 TLV 解析 + `createKey`（MD5 拼接）派生 16 字节 key，再经 §5.4 的 `decryptByPlan`（逆序古典 / AES 组合 + `unpadFuzzy`）还原**明文密钥串**。ET 变体额外用 `createMuitKeys` 把明文解析为 `[min,max]key;...` 的**多密钥区间映射**。
+
+**④ 内容解密层：** hls.js 用派生的密钥对分片做 **AES-128-CBC、IV 全零、逐片 PKCS#7 去填充**。
+
+**⑤ 本地落盘层：** 下载时把明文密钥写入视频目录 `vodkey.bin`（改写前先备份 `.bak`），并把 XDF 元数据写入下载项：
+
+```js
+if (!e || !e.key) return;
+const n = Buffer.from(e.key, "base64"), r = await this.getPath(), i = path.join(r, "vodkey.bin");
+... this.xdf.ke = t; this.keytime = await ni.mobi.getTimestamp();
+await file.writeAllBytes(i, n); await this.save();
+```
+
+下载项字段：`xdf.ke` / `keytime` / `playtime`（`= 1000*e.time`）/ `createtime`。
+
+**⑥ 时效与防分享层（关键）：**
+
+- `invalidM3u8`：`KOOLEARN_M3U8_INVALID_TIME || 3e5`，即 **5 分钟**；超时视为 `local.m3u8` 失效，需重新生成。
+- `auth_key`：URL 中的 `auth_key=<unix秒>` 过期后触发 `_reloadForVod()` 重新取流；非 `auth_key` 请求会追加 `_t=<时间戳>` 防缓存。
+
+> 定性：这是一套**「服务端下发自定义密钥容器 + 客户端私有派生 + 本地时效门」**的 DRM。真正的门槛不在密码学强度（古典密码 + AES-128-ECB 组合、IV 全零），而在**密钥容器格式与派生流程的私有性**，以及 **ET 多密钥 / 时效门**带来的工程复杂度。
+
+### 5.11 DRM 的去除与绕过
+
+> 以下均为**本地已购课程备份 / 互操作研究**用途，请遵守 §0 合规声明与当地法律。
+
+**A. 直接去除（离线导出，已验证）**——对应 §7 的三条路线：
+
+| 路线 | 做法 | 状态 |
+|---|---|---|
+| **B** | 若为**标准** AES-128（非 koolearn 私有），用 `cmd/hlsget` 标准解密 + ffmpeg remux | ✅ 见 §10 |
+| **C** | 复刻 `decryptByPlan` 私有派生，离线还原密钥并解密分片，`cmd/kcrypt` + `cmd/vodexport` 导出 MP4 | ✅ 与原生**逐字节对拍**通过，见 §11 / §12 |
+| **A** | 运行时 hook `decrypt`，dump 真实密钥 / 多密钥表 | 🔜 备选，见 §9 |
+
+要点：**路线 C 早已绕开一切时效门**——因为密钥派生只依赖本地 `KEY.` 容器与算法，不依赖 `auth_key` / `playtime`；把 `vodkey.bin` + `index.m3u8` 拿到即可离线复现，无需联网、无需客户端校验。
+
+**B. 运行时绕过（不改算法，只改校验）**——供调试 / 研究：
+
+1. **时效门绕过**：把 `invalidM3u8` 阈值（`3e5` → `Infinity`）或时间戳来源改掉，即可让旧 `local.m3u8` 长期有效。
+2. **重取流拦截**：hook `_reloadForVod`，在 `auth_key` 过期时不重取而是复用已缓存的密钥。
+3. **密钥 dump**：在 §5.7 的 `decrypt(...)` 返回点、或 §5.9 的 `_decrypt(...)` 输出缓冲处下断点 / 打补丁，直接读出明文密钥串。
+
+**C. 旁路（另一类内嵌密钥）**——bundle 中存在一条**非 `KEY.` 容器**的分支：当 `decryptdata.uri` 尾部是 base64 时，解码为 JSON，若 `enc_type == 2` 且含 `key`，则直接对下行数据**逐字节 XOR** 该 `key`：
+
+```js
+if (... enc_type == 2 && p.hasOwnProperty("key")) {
+  var m = p.key;
+  o.decryptkey = a.decryptdata.key = new Uint8Array(e.data);
+  for (var g = 0; g < a.decryptdata.key.length; g++)
+      o.decryptkey[g] = a.decryptdata.key[g] ^ m;   // 逐字节 XOR
+  a.decryptdata.key = o.decryptkey; s = !0;
+}
+```
+
+这条路径**不涉及 §5 的私有派生**，等价于「密钥随清单内嵌」，只需 base64 解码 + XOR 即可还原，属于最容易绕过的分支。
+
+**结论：**
+
+- 对**标准 AES-128**：路线 B 一步到位。
+- 对 **koolearn 私有 `KEY.`**：路线 C 离线复刻最稳，且天然免疫时效门。
+- **运行时绕过**只改校验（时效 / hook），不改算法，适合调试；**旁路 `enc_type=2`** 则是清单内嵌 XOR 密钥的独立捷径。
+- **不建议**在联网客户端内实时解密再外传，合规与稳定性都更差；离线方案（B / C）已在本地完成验证。
 
 ---
 
@@ -493,8 +719,8 @@ flowchart LR
 - [x] 「解密 `.ts` + `ffmpeg` 合并为 `.mp4`」的完整流程：已由路线 C 实现为 `cmd/vodexport`，见 §12。
 - [x] **方案 C**：补全 `decryptByPlan` 字节级细节，确认 `sel=3`（`AesDecryptECB`），复刻离线密钥派生。见 §11。
 - [x] 校验 `KEY.` 容器的完整 TLV 字段布局（各 tag 的 type/length/value 编码）。见 §5.2。
-- [ ] 补充 `koolearn-m3u8-parser` 的解析细节。
-- [ ] （可选）WASM 解密路径的逆向。
+- [x] 补充 `koolearn-m3u8-parser` 的解析细节。见 §5.8。
+- [x] （可选）WASM 解密路径的逆向。见 §5.9。
 
 ---
 
