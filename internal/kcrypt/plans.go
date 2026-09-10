@@ -22,11 +22,20 @@ var plansDIC = [32]int8{
 // deliberately forgiving rules. key is always the 16-byte derived key and each
 // primitive receives that full length, exactly like the reference call sites.
 func decryptByPlan(plans, key, data []byte) []byte {
+	return unpadFuzzy(decryptByPlanRaw(plans, key, data))
+}
+
+// decryptByPlanRaw is decryptByPlan without the trailing PKCS#7 strip. The
+// reference strips unconditionally, which loses a real trailing byte whenever a
+// 16-byte plaintext ends in 0x01: encryptByPlan pads nothing at that length, so
+// the byte is data rather than padding. Callers that know the plaintext length
+// use this to recover it.
+func decryptByPlanRaw(plans, key, data []byte) []byte {
 	buf := append([]byte(nil), data...)
 	for idx := len(plans) - 1; idx >= 0; idx-- {
 		buf = applyPlan(plans[idx], key, buf, false)
 	}
-	return unpadFuzzy(buf)
+	return buf
 }
 
 // encryptByPlan mirrors encryptByPlan (0x6f80): PKCS#7 pad up to a 16-byte

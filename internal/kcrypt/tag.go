@@ -260,11 +260,22 @@ func createTokenTag(token []byte) tokenTag {
 // dataTag when EncryptType != 1 because decryptByPlan bails out early; the Go
 // version returns an empty tag instead of leaving the caller with garbage.
 func getData(et encryptTag, key, src []byte) dataTag {
+	return getDataWith(et, key, src, true)
+}
+
+// getDataWith is getData with the trailing PKCS#7 strip made optional. The
+// reference always strips, which is lossy for a 16-byte plaintext ending in
+// 0x01; see decryptByPlanRaw.
+func getDataWith(et encryptTag, key, src []byte, unpad bool) dataTag {
 	var t dataTag
 	if et.encryptType != 1 {
 		return t
 	}
-	t.data = decryptByPlan(et.plans, key, src)
+	if unpad {
+		t.data = decryptByPlan(et.plans, key, src)
+	} else {
+		t.data = decryptByPlanRaw(et.plans, key, src)
+	}
 	return t
 }
 

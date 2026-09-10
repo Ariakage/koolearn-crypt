@@ -31,6 +31,19 @@ type Context struct {
 // length runs past the container returns codeBadMagic instead of returning
 // uninitialised memory.
 func Decrypt(container []byte, ctx Context) ([]byte, error) {
+	return decrypt(container, ctx, true)
+}
+
+// DecryptRaw is Decrypt without the trailing PKCS#7 strip on the data tag. The
+// reference strips unconditionally, so a plaintext that is already a multiple
+// of 16 bytes and ends in 0x01 loses that byte; encryptByPlan adds no padding
+// at that length, making the byte real data. Callers expecting a fixed-length
+// key use this as a fallback when Decrypt comes up short.
+func DecryptRaw(container []byte, ctx Context) ([]byte, error) {
+	return decrypt(container, ctx, false)
+}
+
+func decrypt(container []byte, ctx Context, unpad bool) ([]byte, error) {
 	if len(container) < headerLen {
 		return nil, errf(codeBadMagic, "container shorter than header")
 	}
@@ -114,7 +127,61 @@ func Decrypt(container []byte, ctx Context) ([]byte, error) {
 		}
 	}
 
-	return getData(et, key16[:], dt.data).data, nil
+	return getDataWith(et, key16[:], dt.data, unpad).data, nil
+}
+
+// ContainerExpires returns the cleartext expires field of a KEY. container.
+//
+// The expires tag stores the value twice: once in the clear, so a client can
+// tell whether a cached container is stale without the key, and once encrypted
+// inside expiresData. Callers that only need the createKey input can therefore
+// read it without decrypting the container.
+//
+// Unlike Decrypt this does not verify anything, so it returns codeBadMagic for
+// any structural problem rather than the more specific token/expires codes.
+func ContainerExpires(container []byte) (int64, error) {
+	if len(container) < headerLen {
+		return 0, errf(codeBadMagic, "container shorter than header")
+	}
+	if binary.LittleEndian.Uint32(container[0:4]) != magic {
+		return 0, errf(codeBadMagic, "bad KEY. magic")
+	}
+
+	p := headerLen
+	for p+2 <= len(container) {
+		var n int
+		switch binary.LittleEndian.Uint16(container[p : p+2]) {
+		case tagEncrypt:
+			if p+5 > len(container) {
+				return 0, errf(codeBadMagic, "truncated encrypt tag")
+			}
+			pl := int(binary.LittleEndian.Uint16(container[p+3 : p+5]))
+			if p+7+pl > len(container) {
+				return 0, errf(codeBadMagic, "truncated encrypt tag plans")
+			}
+			kl := int(binary.LittleEndian.Uint16(container[p+5+pl : p+7+pl]))
+			n = 7 + pl + kl
+		case tagToken, tagHash:
+			n = 18
+		case tagExpires:
+			if p+expiresTagLen > len(container) {
+				return 0, errf(codeBadMagic, "truncated expires tag")
+			}
+			return int64(binary.LittleEndian.Uint64(container[p+2 : p+10])), nil
+		case tagData:
+			if p+6 > len(container) {
+				return 0, errf(codeBadMagic, "truncated data tag")
+			}
+			n = 6 + int(binary.LittleEndian.Uint32(container[p+2:p+6]))
+		default:
+			return 0, errf(codeBadMagic, "unknown tag %#04x at %d", binary.LittleEndian.Uint16(container[p:p+2]), p)
+		}
+		if n <= 0 || p+n > len(container) {
+			return 0, errf(codeBadMagic, "bad tag length %d at %d", n, p)
+		}
+		p += n
+	}
+	return 0, errf(codeBadMagic, "no expires tag")
 }
 
 // Encrypt mirrors encrypt_parse (0x22b0). It always emits version 2 and the
