@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -78,6 +79,14 @@ func main() {
 		os.Exit(2)
 	}
 	playlistURL := flag.Arg(0)
+
+	// ffmpeg is optional: when it is missing, degrade to -no-mux rather than fail.
+	if !*noMux {
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			fmt.Fprintln(os.Stderr, "warning: ffmpeg not found in PATH; falling back to -no-mux (.ts output)")
+			*noMux = true
+		}
+	}
 
 	wd := *workDir
 	if wd == "" {

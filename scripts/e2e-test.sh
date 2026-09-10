@@ -18,6 +18,13 @@ log() { printf '%s[e2e]%s %s\n' "$c_cyan" "$c_off" "$*"; }
 pass(){ printf '%s[PASS]%s %s\n' "$c_green" "$c_off" "$*"; }
 die() { printf '%s[FAIL]%s %s\n' "$c_red" "$c_off" "$*" >&2; exit 1; }
 
+# A PYTHONHOME/PYTHONPATH inherited from the caller's shell can point at a
+# different interpreter and make python3 abort before it starts; drop them only
+# when python3 is currently unusable, leaving healthy environments untouched.
+if ! python3 -c 'pass' >/dev/null 2>&1; then
+  unset PYTHONHOME PYTHONPATH
+fi
+
 for dep in ffmpeg ffprobe openssl python3; do
   command -v "$dep" >/dev/null 2>&1 || die "$dep not found in PATH"
 done
@@ -25,6 +32,7 @@ done
 md5of() { md5 -q "$1" 2>/dev/null || md5sum "$1" | awk '{print $1}'; }
 
 log "building hlsget ..."
+mkdir -p "$(dirname "$BIN")"
 ( cd "$REPO" && go build -o "$BIN" ./cmd/hlsget )
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/hlsb-e2e.XXXXXX")"

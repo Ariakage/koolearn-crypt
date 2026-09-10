@@ -12,7 +12,8 @@
 // under the single 16-byte key that key.bin yields, and each segment carries
 // its own PKCS#7 padding. Export replays the client offline: recover the key
 // with kcrypt, decrypt the segments in playlist order and remux the
-// concatenated MPEG-TS to MP4 with ffmpeg.
+// concatenated MPEG-TS to MP4 with ffmpeg. With NoMux the plaintext .ts is
+// left as the artifact instead, so ffmpeg is not required at all.
 //
 // Nothing here touches the network: the point is to work on the client's cache.
 package vod
@@ -52,19 +53,29 @@ type Video struct {
 
 // Options controls one Export call.
 type Options struct {
-	Token     string                        // client token, normally the numeric user id
-	OutDir    string                        // directory for the .mp4 files
-	Overwrite bool                          // re-export even if the .mp4 exists
+	// Token is the client token, normally the numeric user id. It is optional:
+	// the container key does not depend on it, and the only v2 check that
+	// consumes it (the tokenTag match) is skipped when it is empty or when
+	// SkipTokenCheck is set. vod.ResolveToken can fill it from the local cache.
+	Token string
+	// SkipTokenCheck forces the v2 tokenTag check to be skipped even when Token
+	// is set. The recovered key is identical either way, so this is a safe
+	// fallback whenever the token cannot be trusted.
+	SkipTokenCheck bool
+
+	OutDir    string                        // directory for the produced files
+	Overwrite bool                          // re-export even if the output exists
 	KeepTS    bool                          // keep the plaintext .ts next to the .mp4
-	Remux     func(ts, mp4 string) error    // defaults to hls.RemuxQuiet
+	NoMux     bool                          // stop at the plaintext .ts (<id>.ts); skip ffmpeg
+	Remux     func(ts, mp4 string) error    // defaults to hls.RemuxQuiet; ignored when NoMux
 	Logf      func(format string, a ...any) // progress sink; defaults to no output
 }
 
 // Result describes the outcome of one Export call.
 type Result struct {
 	Video    Video
-	Out      string // path of the .mp4
-	TS       string // path of the intermediate .ts, empty when removed
+	Out      string // path of the produced file (.mp4, or .ts when NoMux)
+	TS       string // path of the plaintext .ts, empty when removed
 	Segments int
 	Bytes    int64 // plaintext MPEG-TS size
 	Skipped  bool
@@ -98,16 +109,22 @@ func Discover(root string) ([]Video, error) {
 	return out, nil
 }
 
-// Export decrypts one video and writes <OutDir>/<id>.mp4. It returns ErrExists
-// (wrapped) together with a Skipped result when the destination is present and
-// Overwrite is false.
+// keyOpts carries the token material used to open key containers.
+type keyOpts struct {
+	token string
+	skip  bool
+}
+
+// Export decrypts one video and writes <OutDir>/<id>.mp4 (or <OutDir>/<id>.ts
+// when NoMux is set). It returns ErrExists (wrapped) together with a Skipped
+// result when the destination is present and Overwrite is false.
 func Export(ctx context.Context, v Video, opt Options) (*Result, error) {
-	if opt.Token == "" {
-		return nil, errors.New("vod: token is required")
-	}
 	if opt.OutDir == "" {
 		return nil, errors.New("vod: output dir is required")
 	}
+	// An empty token means "unknown": skip the v2 token check instead of
+	// failing, since the key derivation does not consume the plaintext token.
+	ko := keyOpts{token: opt.Token, skip: opt.SkipTokenCheck || opt.Token == ""}
 	remux := opt.Remux
 	if remux == nil {
 		remux = hls.RemuxQuiet
@@ -118,7 +135,11 @@ func Export(ctx context.Context, v Video, opt Options) (*Result, error) {
 	}
 
 	start := time.Now()
-	out := filepath.Join(opt.OutDir, v.ID+".mp4")
+	ext := ".mp4"
+	if opt.NoMux {
+		ext = ".ts"
+	}
+	out := filepath.Join(opt.OutDir, v.ID+ext)
 	if !opt.Overwrite {
 		if _, err := os.Stat(out); err == nil {
 			return &Result{Video: v, Out: out, Skipped: true}, fmt.Errorf("%s: %w", out, ErrExists)
@@ -133,11 +154,14 @@ func Export(ctx context.Context, v Video, opt Options) (*Result, error) {
 		return nil, err
 	}
 
-	tsFile, tsPath, err := openTS(out, opt.KeepTS)
+	// With NoMux the plaintext .ts is the final artifact, so it must always be
+	// kept at the output path; otherwise it is an intermediate that is removed
+	// unless the caller asked to keep it.
+	keep := opt.KeepTS || opt.NoMux
+	tsFile, tsPath, err := openTS(out, keep)
 	if err != nil {
 		return nil, err
 	}
-	keep := opt.KeepTS
 	cleanup := func() {
 		tsFile.Close()
 		if !keep {
@@ -152,7 +176,7 @@ func Export(ctx context.Context, v Video, opt Options) (*Result, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		plain, err := decryptSegment(v, seg, opt.Token, keys)
+		plain, err := decryptSegment(v, seg, ko, keys)
 		if err != nil {
 			return nil, fmt.Errorf("segment %d (%s): %w", i, seg.URI, err)
 		}
@@ -166,13 +190,18 @@ func Export(ctx context.Context, v Video, opt Options) (*Result, error) {
 	}
 	logf("decrypted %d segments (%s)", len(pl.Segments), humanBytes(written))
 
-	if err := remux(tsPath, out); err != nil {
-		return nil, err
+	if opt.NoMux {
+		// No remux step: tsPath already points at out.
+		logf("wrote %s", out)
+	} else {
+		if err := remux(tsPath, out); err != nil {
+			return nil, err
+		}
+		if !keep {
+			_ = os.Remove(tsPath)
+		}
+		logf("wrote %s", out)
 	}
-	if !keep {
-		_ = os.Remove(tsPath)
-	}
-	logf("wrote %s", out)
 
 	res := &Result{
 		Video:    v,
@@ -226,7 +255,7 @@ func openTS(out string, keep bool) (*os.File, string, error) {
 }
 
 // decryptSegment reads one segment and returns its plaintext MPEG-TS bytes.
-func decryptSegment(v Video, seg m3u8.Segment, token string, keys map[string][]byte) ([]byte, error) {
+func decryptSegment(v Video, seg m3u8.Segment, ko keyOpts, keys map[string][]byte) ([]byte, error) {
 	path, err := resolveLocal(v.Playlist, seg.URI)
 	if err != nil {
 		return nil, err
@@ -238,7 +267,7 @@ func decryptSegment(v Video, seg m3u8.Segment, token string, keys map[string][]b
 	if seg.Key == nil || seg.Key.Method == "" || strings.EqualFold(seg.Key.Method, "NONE") {
 		return blob, nil
 	}
-	key, iv, err := segmentKey(v.Playlist, seg, token, keys)
+	key, iv, err := segmentKey(v.Playlist, seg, ko, keys)
 	if err != nil {
 		return nil, err
 	}
@@ -247,14 +276,14 @@ func decryptSegment(v Video, seg m3u8.Segment, token string, keys map[string][]b
 
 // segmentKey resolves the key for a segment, caching by key path so a
 // multi-key playlist only decrypts each container once.
-func segmentKey(playlist string, seg m3u8.Segment, token string, keys map[string][]byte) (key, iv []byte, err error) {
+func segmentKey(playlist string, seg m3u8.Segment, ko keyOpts, keys map[string][]byte) (key, iv []byte, err error) {
 	path, err := resolveLocal(playlist, seg.Key.URI)
 	if err != nil {
 		return nil, nil, err
 	}
 	key, ok := keys[path]
 	if !ok {
-		if key, err = containerKey(path, token); err != nil {
+		if key, err = containerKey(path, ko); err != nil {
 			return nil, nil, err
 		}
 		keys[path] = key
@@ -276,7 +305,7 @@ func segmentKey(playlist string, seg m3u8.Segment, token string, keys map[string
 // containerKey decrypts a KEY. container into its 16-byte segment key. The
 // expires field is read from the container itself and fed back to kcrypt as
 // ctx.Expires, which is what the client does when the cached value is fresh.
-func containerKey(path, token string) ([]byte, error) {
+func containerKey(path string, ko keyOpts) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read key container: %w", err)
@@ -286,9 +315,10 @@ func containerKey(path, token string) ([]byte, error) {
 		return nil, fmt.Errorf("key container %s: %w", path, err)
 	}
 	ctx := kcrypt.Context{
-		Expires:  expires,
-		UseToken: token != "",
-		Token:    []byte(token),
+		Expires:        expires,
+		UseToken:       ko.token != "",
+		Token:          []byte(ko.token),
+		SkipTokenCheck: ko.skip,
 	}
 	key, err := kcrypt.Decrypt(data, ctx)
 	if err != nil {
