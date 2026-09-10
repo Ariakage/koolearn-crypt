@@ -274,7 +274,7 @@ module.exports.decrypt = function (data, key, token, expires) {
 | `data` | Buffer | `KEY.` 容器密文（即 `vodkey.bin` 内容 / 密钥块） |
 | `key` | Buffer | 硬编码盐：ET 变体为 `"5wqPBk89IkGBxXZy"`，否则为空 Buffer |
 | `token` | Buffer | 用户 token（`user_id`） |
-| `expires` | Integer | 时间戳；与魔数 `0x58D10EEF` 比较（方案分支开关） |
+| `expires` | Integer | 时间戳；不大于魔数 `0x58D10EEF` 时回退为 `time(NULL)*1000`（毫秒） |
 
 返回：`{ code, result }`（`CreateResult` @0x1a70 用 `v8::Integer::New` + `node::Buffer::Copy` + `Object::Set` 组装）。
 
@@ -451,7 +451,7 @@ if (l.isKoolearnET)
 |---|---|---|---|
 | **A. 运行时 dump 密钥** | Hook `koolearn-decrypt.decrypt`，在 App 播放时把真实密钥/多密钥表导出，再离线解密合并 | 中 | **最实际**，绕开算法细节 |
 | **B. 标准 AES-128 分支** ✅ 已实现 | 标准 HLS AES-128（显式 IV 或 IV=序号）直接下载 + 解密 + 合并 | 低 | 见 §10 `hlsget`；仅适用于非私有加密内容 |
-| C. 完整逆向 decrypt.node ✅ 已实现 | 复刻 `decryptByPlan` 多轮组合算法，独立离线派生密钥 | 高 | 见 §11 `kcrypt`；已与原生模块逐字节对拍通过 |
+| C. 完整逆向 decrypt.node ✅ 已实现 | 复刻 `decryptByPlan` 多轮组合算法，独立离线派生密钥 | 高 | 见 §11 `kcrypt`（已与原生模块逐字节对拍）+ §12 `vodexport`（已全量导出） |
 | D. 录屏兜底 | 播放时屏幕/音频采集 | 低 | 质量损失，最后手段 |
 
 **方案 A 推荐流程：**
@@ -470,7 +470,7 @@ hook decrypt()  →  按分片序号收集每段 key（含 createMuitKeys 多密
 
 | 符号 | 地址 | 说明 |
 |---|---|---|
-| `Method` | 0x1be0 | JS 入口（NAN_METHOD），校验 argc>3，expires 与 `0x58D10EEF` 比较 |
+| `Method` | 0x1be0 | JS 入口（NAN_METHOD），校验 argc>3，`expires` 经 `0x58D10EEF` 兜底后写入 `ctx` |
 | `Init` | 0x1ef0 | 模块注册 |
 | `CreateResult` | 0x1a70 | 组装 `{code, result}` 返回对象 |
 | `decrypt_parse` | 0x2540 | 解析 `KEY.` 容器 + 派生密钥（核心校验） |
@@ -491,7 +491,7 @@ hook decrypt()  →  按分片序号收集每段 key（含 createMuitKeys 多密
 |---|---|
 | `0x2e59454b` | ASCII `KEY.`（容器头，小端） |
 | version `2` | 容器版本（2 字节） |
-| `0x58D10EEF` | Unix 时间 2017-03-13，`Method` 中的方案/版本分支开关 |
+| `0x58D10EEF` | Unix 时间 1490095855（2017-03-21 11:30:55 UTC），`expires` 兜底阈值：`expires > 0x58D10EEF ? expires : time(NULL)*1000` |
 | `"5wqPBk89IkGBxXZy"` | ET 变体硬编码盐（16 字节） |
 
 **逆向工具链：** Apple `objdump`（LLVM）+ `otool` + `nm`（无 radare2/ghidra，符号未 strip 故足够）。
@@ -503,7 +503,7 @@ hook decrypt()  →  按分片序号收集每段 key（含 createMuitKeys 多密
 > 路线 B（标准 AES-128）与路线 C（复刻 `decryptByPlan`）均已用 Go 实现并通过验证，见 §10 / §11。以下为剩余候选方向：
 
 - [ ] **方案 A**：编写 `decrypt` hook 脚本，运行时 dump 真实密钥 / 多密钥表（现为备选）。
-- [ ] **方案 A**：编写「解密 `.ts` + `ffmpeg` 合并为 `.mp4`」的完整脚本。
+- [x] 「解密 `.ts` + `ffmpeg` 合并为 `.mp4`」的完整流程：已由路线 C 实现为 `cmd/vodexport`，见 §12。
 - [x] **方案 C**：补全 `decryptByPlan` 字节级细节，确认 `sel=3`（`AesDecryptECB`），复刻离线密钥派生。见 §11。
 - [x] 校验 `KEY.` 容器的完整 TLV 字段布局（各 tag 的 type/length/value 编码）。见 §5.2。
 - [ ] 补充 `koolearn-m3u8-parser` 的解析细节。
@@ -599,10 +599,12 @@ koolearn-crypt/
 │  ├─ kcrypt.go        # 包文档、错误码（-2..-6）
 │  ├─ tag.go          # 5 种 TLV 标签读写 + createKey/createEncryptTag
 │  ├─ parser.go       # Decrypt/Encrypt：容器解析与 v2 完整性校验
+│  ├─ method.go       # Method 入口层：expires 兜底 + DecryptMethod
 │  ├─ plans.go        # PLANS_DIC + decryptByPlan/encryptByPlan + 宽松去填充
 │  ├─ primitives.go   # Caesar / RC4 / Fence / AES-128-ECB
 │  ├─ hash.go         # MD5、SHA1_LE、createHashTag
-│  └─ oracle_test.go  # 与 harness/oracle 的对拍测试
+│  ├─ oracle_test.go  # 与 harness/oracle 的对拍测试
+│  └─ method_test.go  # Method 层归一化单元测试
 ├─ harness/
 │  ├─ oracle.c        # dlopen decrypt.node，行协议暴露全部符号
 │  └─ build.sh        # clang -arch x86_64 → oracle
@@ -617,16 +619,35 @@ koolearn-crypt/
 type Context struct {
     Key      []byte // 调用方 key（ET 变体为 "5wqPBk89IkGBxXZy"）
     UseKey   bool   // false 时 createKey 用内置常量 752500f5fa6b6b8f
-    Expires  int64  // 过期时间（Unix 秒），>0 时参与密钥派生
+    Expires  int64  // 过期时间，>0 时参与密钥派生（单位由调用方约定）
     UseToken bool
     Token    []byte
 }
 
-func Decrypt(container []byte, ctx Context) ([]byte, error) // 解 KEY. 容器
-func Encrypt(plain []byte, ctx Context) ([]byte, error)     // 生成 version=2 容器
+func Decrypt(container []byte, ctx Context) ([]byte, error) // 解 KEY. 容器（= decrypt_parse）
+func DecryptRaw(container []byte, ctx Context) ([]byte, error) // 同上，但跳过尾部 PKCS#7 去填充（见 §12.6）
+func Encrypt(plain []byte, ctx Context) ([]byte, error)     // 生成 version=2 容器（= encrypt_parse）
+
+// Method 入口层（= 原生 addon 的 JS 入口 Method @0x1be0）
+const MethodExpiresFloor int64 = 0x58D10EEF                        // 1490095855 = 2017-03-21 11:30:55 UTC
+func NormalizeExpires(expires int64) int64                         // expires > floor ? expires : time(NULL)*1000
+func DecryptMethod(container []byte, ctx Context) ([]byte, error)  // 归一化 expires 后调 Decrypt
 ```
 
 失败返回 `*kcrypt.Error`，`Code` 与原实现一致：`-2` 魔数/标签数 · `-3` 版本 · `-4` token · `-5` expires · `-6` hash。
+
+**`Method` 的 expires 兜底**（0x1be0，在 `decrypt_parse` 之外）：
+
+```asm
+cmpq  $0x58d10eef, %rax    ; rax = expires
+jg    keep                 ; 大于阈值 -> 原样使用
+call  time(NULL)           ; 否则取当前时间
+imulq $0x3e8, %rax, %rax   ; 秒 -> 毫秒
+```
+
+即 `ctx.expires = expires > 0x58D10EEF ? expires : time(NULL)*1000`。`Decrypt` 保持与 `decrypt_parse` 严格对应（oracle 对拍依赖此点），需要完整复刻客户端行为时用 `DecryptMethod`。
+
+注意 `expires` 参与 `createKey`（`>0` 时写入偏移 0x20 并混入 token），归一化会改变派生密钥，因此兜底路径只对"客户端与服务端使用同一归一化值"的容器成立。
 
 ### 11.3 验证方式（对拍 oracle）
 
@@ -634,7 +655,7 @@ func Encrypt(plain []byte, ctx Context) ([]byte, error)     // 生成 version=2 
 
 ```bash
 bash harness/build.sh          # 需 x86_64（Apple Silicon 走 Rosetta）
-go test ./internal/kcrypt/ -v  # 10 个测试，全部对拍原生模块
+go test ./internal/kcrypt/ -v  # 13 个测试（10 个对拍原生模块 + 3 个纯 Go 单元测试）
 ```
 
 | 测试 | 样本 | 覆盖 |
@@ -649,6 +670,9 @@ go test ./internal/kcrypt/ -v  # 10 个测试，全部对拍原生模块
 | `TestDecryptParseAgainstOracle` | 200 | 解 `encrypt_parse` 生成的容器 |
 | `TestEncryptParseAgainstOracle` | 200 | Go 加密 → 原生解密 |
 | `TestDecryptParseRejectsTampered` | — | 篡改/错 token/过期/坏魔数/坏版本 |
+| `TestNormalizeExpiresAt` | 9 | `Method` 阈值边界（等于/小于/大于 `0x58D10EEF`、0、负数、int64 极值） |
+| `TestNormalizeExpiresFallbackShape` | — | 兜底值为 `秒×1000` 且跟随墙钟 |
+| `TestDecryptMethodNormalizesExpires` | — | 阈值处 `Decrypt` 与 `DecryptMethod` 的行为差异 |
 
 > oracle 缺失或无法运行（非 x86_64）时测试自动 `t.Skip`。
 
@@ -657,6 +681,94 @@ go test ./internal/kcrypt/ -v  # 10 个测试，全部对拍原生模块
 - **路线 B（`hlsget`）** 处理**标准 HLS AES-128**：分片是标准加密的，密钥可直接从 playlist 的 `#EXT-X-KEY` 取到。
 - **路线 C（`kcrypt`）** 处理 **koolearn 私有加密**：`vodkey.bin` 是 `KEY.` 容器，需先解出其中的多密钥串（配合 §5.7 的 `createMuitKeys` 逻辑）才能解密分片。
 - 两者可组合：`kcrypt` 解出密钥后，按分片区间套用对应的 AES-128 解密即可导出 MP4。合规见 §0。
+
+---
+
+## 12. 路线 C 实战：vodexport（缓存导出为 MP4）
+
+把客户端**已经下载到本地**的视频（`~/Library/Application Support/koolearn/koolearn/download/`）离线解密为 MP4。全程**不联网**：密钥从缓存里的 `key.bin` 现成解出，分片从磁盘读。
+
+### 12.1 目录结构
+
+```
+koolearn-crypt/
+├─ cmd/vodexport/main.go      # CLI：发现、并发编排、结果汇总
+├─ internal/vod/export.go     # Discover / Export：解密钥 → 解分片 → remux
+└─ internal/hls/mux.go        # Remux（带进度）/ RemuxQuiet（并发时静默）
+```
+
+缓存布局（每个视频一个目录）：
+
+```
+<root>/<video-id>/<hash>_0.m3u8          # 媒体 playlist，METHOD=KOOLEARN
+<root>/<video-id>/<hash>_0/key.bin       # KEY. 容器（§5.2）
+<root>/<video-id>/<hash>_0/<hash>-00001.ts   # AES-128-CBC 密文
+```
+
+### 12.2 核心流程
+
+```
+vodexport -token <uid> <download root>
+ 1. Discover：<root>/<vid>/ 下有唯一 .m3u8 即视为一个视频（多个则报错，不猜测）
+ 2. 解析 playlist（拒绝 master）→ 每分片带 #EXT-X-KEY:METHOD=KOOLEARN
+ 3. key.bin：kcrypt.ContainerExpires 读明文 expires
+      → kcrypt.Decrypt(Context{Expires, UseToken, Token}) → 16B 分片密钥
+ 4. 每分片：AES-128-CBC，IV 全零，去 PKCS#7 → 按 playlist 顺序拼接为 .ts
+ 5. ffmpeg -c copy -bsf:a aac_adtstoasc -movflags +faststart → <video-id>.mp4
+```
+
+**两个非标准点**（均已在 §5 证实）：
+
+- **IV 恒为全零**，不是 HLS 标准的「媒体序号推导 IV」——所以 `segmentKey` 对 `KOOLEARN` 直接返回 16 字节零 IV。
+- **每分片独立 PKCS#7 填充**。明文 TS 长度是 188 的倍数，188 mod 16 = 12，因此填充长度只可能是 4/8/12/16；实测全目录 `size mod 188 ∈ {4,8,12,16}` 与之一致，故可安全调用带去填充的 `hls.DecryptAES128CBC`。
+
+`expires` 取自容器自身的明文副本再回填给 `kcrypt`，等价于客户端「缓存未过期」时的行为；`token` 就是数字 user id。
+
+### 12.3 构建与用法
+
+```bash
+cd koolearn-crypt && go build -o bin/vodexport ./cmd/vodexport
+
+# 先看看发现了什么
+./bin/vodexport -list ~/Library/Application\ Support/koolearn/koolearn/download
+
+# 全量导出（默认输出到 ./export/）
+./bin/vodexport -token 110607776 -jobs 4 \
+  ~/Library/Application\ Support/koolearn/koolearn/download
+
+# 只导一个 / 重导 / 保留明文 .ts
+./bin/vodexport -token 110607776 -only 6p0f88... -overwrite -keep-ts ...
+```
+
+主要 flag：`-in`（也可用位置参数）· `-out`（默认 `export`）· `-token` · `-jobs`（默认 4）· `-overwrite` · `-keep-ts` · `-list` · `-only` · `-q`。已存在的 MP4 默认跳过并计入 `skipped`，不重复劳动。
+
+### 12.4 验证结果
+
+在本机三批缓存上实测（同一工具，第二批的边界情况见 §12.6）：
+
+| 项目 | 第一批 | 第二批 | 第三批 |
+|---|---|---|---|
+| 发现 | 39 / 39 | 56 / 56 | 29 / 29 |
+| 导出 | 38 exported + 1 skipped（已有产物）+ **0 failed**，耗时 **5s**（jobs=4） | 首轮 55 exported + **1 failed**，修复 §12.6 后重跑补齐为 **1 exported + 55 skipped + 0 failed** | 1 试导 + 28 exported + 1 skipped + **0 failed**，耗时 **30s**（jobs=4） |
+| 产物 | 39 个 MP4，约 1.0 GiB（缓存 1.2 GiB） | 56 个 MP4，约 2.2 GiB（缓存 2.2 GiB） | 29 个 MP4，约 2.5 GiB |
+| 编码 | 38× `h264 1280x720` + 1× `h264 1920x1080`，全部 `aac` 立体声 | 全部 `h264` + `aac` 立体声 | 全部 `h264 1280x720` + `aac` 立体声 |
+| 解码 | 39 个全部 `ffmpeg -v error -f null -` **零错误** | 56 个全部 **零错误** | 29 个全部 **零错误** |
+| 与已验证样本对拍 | 同一视频解码后音视频 MD5 **完全一致**（`d3d2034a7f813d017e5b4bf00b13bd6a`），容器仅差 112 B 的 moov 元数据 | 沿用同一方法 | 沿用同一方法 |
+
+### 12.5 边界与注意
+
+- 只处理**已完整下载**的缓存；不联网、不续传、不做变体选择。
+- 仅接受 `METHOD=KOOLEARN`（零 IV）与标准 `AES-128`；其它 METHOD 明确报错。
+- 不支持 master playlist、`#EXT-X-BYTERANGE`、fMP4（`#EXT-X-MAP`）。
+- 产物目录 `export/` 已在 `.gitignore` 中忽略。合规见 §0。
+
+### 12.6 已知偏差：16 字节明文的尾部 `0x01` 被误删
+
+`encryptByPlan` 对 16 字节明文**不填充**（`paddedLen == len(data)`，`pad = 0`），但参考实现的 `decryptByPlan` 末尾**无条件**做 PKCS#7 去填充（§5.4）。当 16 字节明文以 `0x01` 结尾时，最后一字节是真实数据却被当成填充删掉，只剩 15 字节。概率约 1/256，第二批 56 个视频中恰好命中 1 个（`6p0h88627403889r6kbvjamoh`）；该容器本身完全合法，hash / token / expires 校验全部通过。
+
+证据：`Decrypt` 只给出 `33560abcedd6f981d54cd34e37dbfd`（15 字节）。用它补 `0x00` 解密首分片得到乱码，补 `0x01` 则首块以 `0x47` 开头——合法的 MPEG-TS 同步字节，说明尾字节 `0x01` 是密钥本身的一部分。客户端 HLS 解密显然不走这条路径，因此这是原生实现的忠实复刻而非我们的移植错误。
+
+修复：新增 `kcrypt.DecryptRaw`（配合内部 `decryptByPlanRaw` / `getDataWith`）跳过尾部去填充；`vodexport` 在 `Decrypt` 结果不是 16 字节时回退到 `DecryptRaw`，仍不符才报错。`Decrypt` 行为保持不变，因此 §11.3 的 oracle 对拍结果不受影响；差异由 `TestDecryptRawKeepsTrailingPadByte` 固定。
 
 ---
 

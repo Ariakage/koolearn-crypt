@@ -123,6 +123,9 @@ int test_version2(int len, unsigned char* data);   // L303, 0x2aa0 (带 token �
 // CreateResult(int,uchar*,uint) / Method(Nan CB) / Init / node_register_module_v85
 ```
 
+Go 复刻映射 (internal/kcrypt): `decrypt_parse`/`encrypt_parse` → `Decrypt`/`Encrypt`(严格对应, oracle 对拍基础);
+`Method` 的 expires 兜底 → `method.go` 的 `NormalizeExpires`/`DecryptMethod`(`Decrypt` 刻意不含归一化, 以保持与 `decrypt_parse` 逐字节一致)。
+
 ## decryptByPlan 算法 (0x7140-0x7379, 反汇编 100% 还原)
 ```c
 void decryptByPlan(dataTag* tag, encryptTag* e_tag, char* key, char* p_data, int size) {
@@ -173,7 +176,8 @@ case2 = -220 → 0x72a0 Fence_Decrypt
 case3 = -412 → 0x71e0 AesSetKey+AesDecryptECB
 ```
 
-Method 魔数: `expires` 与 `0x58D10EEF` (=1489999855, 2017-03-20 UTC) 比较作版本分支开关。
+Method 魔数: `0x58D10EEF` (=1490095855, 2017-03-21 11:30:55 UTC) 是 `expires` 的兜底阈值：
+`ctx.expires = expires > 0x58D10EEF ? expires : time(NULL)*1000`，即传入值不合法时改用当前毫秒时间。
 JS 层硬编码 key (isKoolearnET): `"5wqPBk89IkGBxXZy"` (16B); token=user_id; expires=timestamp。
 
 ## 密码原语还原 (oracle 真值 + 反汇编双重确认)
@@ -556,4 +560,5 @@ hash 独立复算: MD5(SHA1_le(前134B)) = 2ac2a287b30a000bb2a44cdfe7a6c38a ✓
 - [x] createKey: MD5 派生细节 (basekey+token+expires → 16B key)
 - [x] decrypt_parse: KEY. 容器 TLV 解析顺序 + tagType 常量值
 - [x] encrypt_parse: 容器构造 (用于 harness 造真值样本)
-- [ ] Go 复刻全部流程 + 大规模随机样本交叉验证
+- [x] Go 复刻全部流程 + 大规模随机样本交叉验证 (10 个 oracle 对拍 + 3 个 Method 单元测试)
+- [x] Method 入口层 expires 兜底 (`0x58D10EEF` 阈值 → `DecryptMethod`)
