@@ -33,6 +33,10 @@
 - [9. 后续 TODO](#9-后续-todo)
 - [10. 路线 B 实现：hlsget（Go）](#10-路线-b-实现hlsgetgo)
 - [11. 路线 C 实现：kcrypt（Go，复刻 decryptByPlan）](#11-路线-c-实现kcryptgo复刻-decryptbyplan)
+- [12. 路线 C 实战：vodexport（缓存导出为 MP4）](#12-路线-c-实战vodexport缓存导出为-mp4)
+- [13. Skill 安装方法](#13-skill-安装方法)
+- [14. 程序完整用法](#14-程序完整用法)
+- [15. 端到端导出全流程（Workflow 与流程图）](#15-端到端导出全流程workflow-与流程图)
 
 ---
 
@@ -73,29 +77,20 @@
 
 ## 2. 整体架构
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Electron App                          │
-│                                                              │
-│  ┌──────────────────┐         ┌───────────────────────────┐ │
-│  │   主进程 (Node)   │  IPC    │      渲染进程 (Chromium)    │ │
-│  │  main/main.js     │◄───────►│  dist/bundle.js           │ │
-│  │  main/session.js  │         │   ├─ 定制 hls.js          │ │
-│  │  main/lectures.js │         │   └─ 业务 UI              │ │
-│  └────────┬─────────┘         └────────────┬──────────────┘ │
-│           │                                 │ remote.require │
-│           │                                 ▼                │
-│           │                    ┌────────────────────────┐   │
-│           │                    │ koolearn-decrypt (.node)│   │
-│           │                    │  私有解密原生模块        │   │
-│           │                    └────────────────────────┘   │
-│           │                                                  │
-│  ┌────────▼─────────────────────────────────────────┐      │
-│  │ koolearn-download (Node 模块)                     │      │
-│  │   downloadManager → Queue(5) → hlsDownloader      │      │
-│  │        └─► aria2c (JSON-RPC @127.0.0.1:随机端口)   │      │
-│  └───────────────────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph App["Electron App（koolearncg v5.1.4）"]
+        Main["主进程 (Node)<br/>main/main.js · main/session.js · main/lectures.js"]
+        Render["渲染进程 (Chromium)<br/>dist/bundle.js<br/>定制 hls.js + 业务 UI"]
+        Dec["koolearn-decrypt (.node)<br/>私有解密原生模块"]
+        DL["koolearn-download (Node 模块)<br/>downloadManager → Queue(5) → hlsDownloader"]
+        Aria["aria2c<br/>JSON-RPC @127.0.0.1:随机端口"]
+
+        Main <-->|IPC| Render
+        Render -->|remote.require| Dec
+        Main --> DL
+        DL --> Aria
+    end
 ```
 
 App 存在**两套并行的下载机制**：
@@ -124,18 +119,18 @@ App 存在**两套并行的下载机制**：
 
 **`hlsDownloader.start()` 流程：**
 
-```
-start()
-  ├─ loaddl()          # 读取 index.dl，断点续传已完成分片
-  ├─ getM3u8()         # 拉取 index.m3u8（playlist）
-  ├─ 下载 key          # 拉取密钥块 → 写入 vodkey.bin
-  └─ 逐分片下载:
-       await aria2c.open()                       # 启动 aria2c 进程 + JSON-RPC 监听
-       const gids = await aria2c.addUri(segment.url, segmentPath)
-       this.gid = gids[0][0]
-       sucess = await aria2c.wait(this.gid)       # 等待该分片完成
-     ...
-     最后校验 .ts 数量是否与 playlist 一致
+```mermaid
+flowchart TD
+    Start(["hlsDownloader.start()"])
+    Start --> Loaddl["loaddl()<br/>读取 index.dl，断点续传已完成分片"]
+    Loaddl --> GetM3u8["getM3u8()<br/>拉取 index.m3u8（playlist）"]
+    GetM3u8 --> GetKey["下载 key<br/>拉取密钥块 → 写入 vodkey.bin"]
+    GetKey --> Each{"还有未下载分片?"}
+    Each -->|是| Open["aria2c.open()<br/>启动 aria2c 进程 + JSON-RPC 监听"]
+    Open --> Add["addUri(segment.url, segmentPath)<br/>this.gid = gids[0][0]"]
+    Add --> Wait["aria2c.wait(this.gid)<br/>等待该分片完成"]
+    Wait --> Each
+    Each -->|否| Check["校验 .ts 数量是否与 playlist 一致"]
 ```
 
 **`aria2c.ts` 引擎要点：**
@@ -419,24 +414,14 @@ if (l.isKoolearnET)
 
 ## 6. 播放流程（local.m3u8）
 
-```
-1. 下载阶段:
-   index.m3u8 + vodkey.bin + 加密 *.ts  →  落到 §4.3 的视频子目录
-
-2. 播放阶段（createMediaUrl）:
-   生成 local.m3u8：把原 playlist 里的 key URI 改写为指向本地 vodkey.bin
-   以 file:// 方式喂给定制 hls.js
-
-3. hls.js 加载 vodkey.bin（密钥块）→ loadsuccess:
-   调 koolearn-decrypt.decrypt(c, d, h, p) 解出明文密钥
-   ET 变体再 createMuitKeys 展开每段密钥
-
-4. 逐 .ts 分片:
-   用对应密钥（AES-128-CBC，IV=分片序号 或多密钥表）解密
-   → 送入 MSE 播放
-
-5. 时效:
-   invalidM3u8 判定 5 分钟过期（KOOLEARN_M3U8_INVALID_TIME），过期需重新拉取
+```mermaid
+flowchart TD
+    A["① 下载阶段<br/>index.m3u8 + vodkey.bin + 加密 *.ts<br/>→ 落到 §4.3 的视频子目录"]
+    B["② 播放阶段（createMediaUrl）<br/>生成 local.m3u8：把原 playlist 里的 key URI 改写为指向本地 vodkey.bin<br/>以 file:// 方式喂给定制 hls.js"]
+    C["③ hls.js 加载 vodkey.bin（密钥块）→ loadsuccess<br/>调 koolearn-decrypt.decrypt(c, d, h, p) 解出明文密钥<br/>ET 变体再 createMuitKeys 展开每段密钥"]
+    D["④ 逐 .ts 分片<br/>用对应密钥（AES-128-CBC，IV=分片序号 或多密钥表）解密<br/>→ 送入 MSE 播放"]
+    E["⑤ 时效<br/>invalidM3u8 判定 5 分钟过期（KOOLEARN_M3U8_INVALID_TIME）<br/>过期需重新拉取"]
+    A --> B --> C --> D --> E
 ```
 
 **关键结论：** 磁盘上的 `.ts` 始终是密文，**解密只发生在播放时的内存中**，密钥由 `koolearn-decrypt` 现场派生，不落明文。
@@ -456,10 +441,12 @@ if (l.isKoolearnET)
 
 **方案 A 推荐流程：**
 
-```
-hook decrypt()  →  按分片序号收集每段 key（含 createMuitKeys 多密钥）
-   →  openssl aes-128-cbc -d 逐段解密 .ts
-   →  ffmpeg concat 封装为 .mp4
+```mermaid
+flowchart LR
+    A["hook decrypt()<br/>按分片序号收集每段 key<br/>（含 createMuitKeys 多密钥）"]
+    B["openssl aes-128-cbc -d<br/>逐段解密 .ts"]
+    C["ffmpeg concat<br/>封装为 .mp4"]
+    A --> B --> C
 ```
 
 ---
@@ -535,18 +522,27 @@ koolearn-crypt/
 
 ### 10.2 核心流程
 
-```
-hlsget [flags] <playlist.m3u8 URL>
- 1. GET playlist → m3u8.Parse
- 2. 若为 master：按带宽选变体（-variant 可指定）→ 再取 media playlist
- 3. 校验 METHOD：仅接受 AES-128；NONE 直传；其它（私有/SAMPLE-AES）报错并提示走 A/C
- 4. 并发（-c，默认 4）下载每个分片：
-      key = GET(#EXT-X-KEY URI)   # 按绝对 URI 缓存，校验 16 字节
-      iv  = 显式 IV(0x..) 或 媒体序号(128-bit 大端)
-      明文 = AES-128-CBC 解密 → 去 PKCS#7
-    → 写 segments/seg_%06d.ts
- 5. 按序号拼接 → concat.ts
- 6. ffmpeg -c copy -bsf:a aac_adtstoasc -movflags +faststart → out.mp4
+```mermaid
+flowchart TD
+    CMD["hlsget [flags] &lt;playlist.m3u8 URL&gt;"]
+    Parse["GET playlist → m3u8.Parse"]
+    Master{"是 master playlist?"}
+    Variant["按带宽选变体（-variant 可指定）<br/>→ 再取 media playlist"]
+    Method{"METHOD?"}
+    Aes["AES-128"]
+    NoneM["NONE（直传）"]
+    Other["私有 / SAMPLE-AES<br/>报错并提示走 A/C"]
+    Download["并发（-c，默认 4）下载每个分片<br/>key = GET(#EXT-X-KEY URI)，按绝对 URI 缓存、校验 16 字节<br/>iv = 显式 IV(0x..) 或媒体序号（128-bit 大端）<br/>明文 = AES-128-CBC 解密 → 去 PKCS#7<br/>→ 写 segments/seg_%06d.ts"]
+    Concat["按序号拼接 → concat.ts"]
+    Mux["ffmpeg -c copy -bsf:a aac_adtstoasc -movflags +faststart<br/>→ out.mp4"]
+
+    CMD --> Parse --> Master
+    Master -->|是| Variant --> Method
+    Master -->|否| Method
+    Method -->|AES-128| Aes --> Download
+    Method -->|NONE| NoneM --> Download
+    Method -->|其它| Other
+    Download --> Concat --> Mux
 ```
 
 ### 10.3 构建与用法
@@ -707,14 +703,24 @@ koolearn-crypt/
 
 ### 12.2 核心流程
 
-```
-vodexport -token <uid> <download root>
- 1. Discover：<root>/<vid>/ 下有唯一 .m3u8 即视为一个视频（多个则报错，不猜测）
- 2. 解析 playlist（拒绝 master）→ 每分片带 #EXT-X-KEY:METHOD=KOOLEARN
- 3. key.bin：kcrypt.ContainerExpires 读明文 expires
-      → kcrypt.Decrypt(Context{Expires, UseToken, Token}) → 16B 分片密钥
- 4. 每分片：AES-128-CBC，IV 全零，去 PKCS#7 → 按 playlist 顺序拼接为 .ts
- 5. ffmpeg -c copy -bsf:a aac_adtstoasc -movflags +faststart → <video-id>.mp4
+```mermaid
+flowchart TD
+    CMD["vodexport -token &lt;uid&gt; &lt;download root&gt;"]
+    Disc["① Discover<br/>&lt;root&gt;/&lt;vid&gt;/ 下有唯一 .m3u8 即视为一个视频<br/>（多个则报错，不猜测）"]
+    Parse["② 解析 playlist（拒绝 master）<br/>每分片带 #EXT-X-KEY:METHOD=KOOLEARN"]
+    Key["③ key.bin：kcrypt.ContainerExpires 读明文 expires<br/>→ kcrypt.Decrypt(Context{Expires, UseToken, Token})"]
+    Len{"结果是否为 16 字节?"}
+    Raw["kcrypt.DecryptRaw 回退<br/>跳过尾部去填充（见 §12.6）"]
+    Fail["✗ 报错：密钥长度异常"]
+    Dec["④ 每分片：AES-128-CBC，IV 全零，去 PKCS#7<br/>→ 按 playlist 顺序拼接为 .ts"]
+    Mux["⑤ ffmpeg -c copy -bsf:a aac_adtstoasc -movflags +faststart<br/>→ &lt;video-id&gt;.mp4"]
+
+    CMD --> Disc --> Parse --> Key --> Len
+    Len -->|是| Dec
+    Len -->|否| Raw
+    Raw -->|仍不符| Fail
+    Raw -->|已补齐| Dec
+    Dec --> Mux
 ```
 
 **两个非标准点**（均已在 §5 证实）：
@@ -769,6 +775,253 @@ cd koolearn-crypt && go build -o bin/vodexport ./cmd/vodexport
 证据：`Decrypt` 只给出 `33560abcedd6f981d54cd34e37dbfd`（15 字节）。用它补 `0x00` 解密首分片得到乱码，补 `0x01` 则首块以 `0x47` 开头——合法的 MPEG-TS 同步字节，说明尾字节 `0x01` 是密钥本身的一部分。客户端 HLS 解密显然不走这条路径，因此这是原生实现的忠实复刻而非我们的移植错误。
 
 修复：新增 `kcrypt.DecryptRaw`（配合内部 `decryptByPlanRaw` / `getDataWith`）跳过尾部去填充；`vodexport` 在 `Decrypt` 结果不是 16 字节时回退到 `DecryptRaw`，仍不符才报错。`Decrypt` 行为保持不变，因此 §11.3 的 oracle 对拍结果不受影响；差异由 `TestDecryptRawKeepsTrailingPadByte` 固定。
+
+---
+
+## 13. Skill 安装方法
+
+本仓库的 `skill/koolearn-video-crypt-skill/` 目录就是**一个完整的 Qoder Skill**（内含 `SKILL.md`、源码、脚本与 `README.md`）。所谓"安装"，即把该目录放到 Qoder 会扫描的技能目录下。
+
+### 13.1 技能目录约定
+
+技能目录名必须与 `SKILL.md` frontmatter 中的 `name` 一致（本技能为 `koolearn-video-crypt-skill`）。可放三个位置：
+
+| 作用域 | 目录 | 说明 |
+|---|---|---|
+| 个人（全局） | `~/.qoder-cn/skills/<name>/` | 所有项目可见 |
+| 个人（共享存放处） | `~/.agents/skills/<name>/` | 常被 `~/.qoder-cn/skills` 以软链复用 |
+| 项目（仓库内） | `<workspace>/.agents/skills/<name>/` | 仅对该工作区生效，可随仓库分发 |
+
+### 13.2 安装（推荐：软链，仓库更新后自动生效）
+
+```bash
+NAME=koolearn-video-crypt-skill
+SRC="$(pwd)/skill/$NAME"          # 本仓库内技能目录的绝对路径
+
+# 个人级
+mkdir -p ~/.agents/skills ~/.qoder-cn/skills
+ln -sfn "$SRC" ~/.agents/skills/$NAME
+ln -sfn ../../.agents/skills/$NAME ~/.qoder-cn/skills/$NAME
+
+# 或项目级
+mkdir -p .agents/skills
+ln -sfn "$SRC" .agents/skills/$NAME
+```
+
+### 13.3 安装（复制：脱离仓库独立分发）
+
+```bash
+NAME=koolearn-video-crypt-skill
+mkdir -p ~/.qoder-cn/skills
+cp -R "skill/$NAME" ~/.qoder-cn/skills/$NAME
+```
+
+### 13.4 安装后自检
+
+```bash
+ls -l ~/.qoder-cn/skills/$NAME/SKILL.md   # 应能解析到本技能
+sed -n '1,5p' ~/.qoder-cn/skills/$NAME/SKILL.md   # 确认 name / description 存在
+```
+
+随后（重）开一个 Qoder 会话，技能列表中应出现 `koolearn-video-crypt-skill`；提到"导出新东方缓存视频"应能触发。
+
+### 13.5 卸载
+
+```bash
+NAME=koolearn-video-crypt-skill
+unlink ~/.qoder-cn/skills/$NAME 2>/dev/null || rm -rf ~/.qoder-cn/skills/$NAME   # 软链 / 复制版
+unlink ~/.agents/skills/$NAME  2>/dev/null || true
+```
+
+---
+
+## 14. 程序完整用法
+
+三个命令行工具均为**纯 Go 标准库**实现（无 cgo、无第三方依赖）。除 `vodkey` 外，`vodexport` 与 `hlsget` 的**最后一步 remux 可选依赖 ffmpeg**。
+
+| 命令 | 角色 | 需要 ffmpeg |
+|---|---|---|
+| `vodexport` | **主程序**：扫描缓存根目录，把每个视频解密导出为 MP4（路线 C） | 可选（缺失自动降级 `.ts`） |
+| `vodkey` | 诊断：解出单个 `key.bin` 的 16 字节密钥 | 否 |
+| `hlsget` | 路线 B：从 URL 下载标准 `AES-128` HLS 并解密合并 | 可选（缺失自动降级 `.ts`） |
+
+### 14.1 构建
+
+```bash
+./scripts/build.sh                 # 当前平台
+./scripts/build.sh -all            # 交叉编译 windows+darwin × amd64+arm64
+./scripts/build.sh windows amd64   # 指定 GOOS / GOARCH
+./scripts/build.sh -o dist         # 自定义输出目录
+```
+
+Windows（PowerShell）：`.\scripts\build.ps1` / `-All` / `-GOOS windows -GOARCH amd64`。
+
+产物落在 `bin/<goos>-<goarch>/`（如 `bin/darwin-arm64/vodexport`、`bin/windows-amd64/vodexport.exe`）。也可免构建直接 `go run ./cmd/vodexport ...`。
+
+### 14.2 vodexport（主程序）
+
+```
+vodexport [flags] <download root>
+```
+
+| flag | 默认 | 说明 |
+|---|---|---|
+| `<root>` / `-in` | —（必填） | 缓存下载根目录 |
+| `-out <dir>` | `export` | MP4 输出目录 |
+| `-token <uid>` | `auto` | 客户端 token（数字 user id）；`auto` 自动从 `cache/<uid>` 恢复 |
+| `-jobs <n>` | `4` | 并发导出的视频数（`<1` 按 1 处理） |
+| `-only <id,id>` | 空 | 只导出指定视频 id（逗号分隔） |
+| `-overwrite` | 关 | 覆盖已存在的 MP4 |
+| `-keep-ts` | 关 | 保留明文 `.ts` |
+| `-no-mux` | 关 | 只到明文 `.ts`（不调 ffmpeg），输出 `<id>.ts` |
+| `-list` | 关 | 只列出发现的视频后退出 |
+| `-q` | 关 | 静默（不打印逐视频进度） |
+
+```bash
+BIN=bin/darwin-arm64
+ROOT="$HOME/Library/Application Support/koolearn/koolearn/download"
+
+"$BIN/vodexport" -list "$ROOT"                             # 先看发现了什么
+"$BIN/vodexport" -jobs 4 -out export "$ROOT"               # token: auto
+"$BIN/vodexport" -token 110607776 -out export "$ROOT"      # 强制指定 token
+"$BIN/vodexport" -only 6p0f88... -overwrite -keep-ts "$ROOT"
+"$BIN/vodexport" -no-mux "$ROOT"                           # 无 ffmpeg：只出 .ts
+```
+
+行为要点：
+
+- 输出为 `<out>/<video-id>.mp4`；产物**已存在默认跳过**（计入 `skipped`）。
+- 启动打印 `→ root / → output / → token / → videos (jobs=) [/ → format: .ts]`。
+- 每个视频一行：`✓ id  N segments, size (elapsed)` / `= id  exists, skipped` / `✗ id: err`。
+- 汇总 `→ done in Xs: N exported, M skipped, K failed`；只要有 `failed` 则退出码为 1。
+- `PATH` 中无 ffmpeg 时打印 warning 并自动切 `-no-mux`。
+- 未提供 root → 打印 usage 并退出码 2。
+
+> **token 的 auto 恢复**（见 §14.6）：`key.bin` 容器的 `tokenTag` 存的是 `md5(token)`，`auto` 把 `cache/<uid>` 目录名逐个对其做精确匹配；token 不参与密钥派生，因此匹配不到时会**跳过 v2 校验**，解密结果依旧正确。
+
+### 14.3 vodkey（诊断）
+
+```
+vodkey [flags] path/to/key.bin
+```
+
+| flag | 默认 | 说明 |
+|---|---|---|
+| `<key.bin>` | —（必填，恰好 1 个） | 待解容器 |
+| `-key <K>` | 空 | base key（ET 硬编码 `5wqPBk89IkGBxXZy` 或 caller key）；容器自描述时可省 |
+| `-token <uid>` | `auto` | 同 `vodexport`；`auto` 从 cache 恢复 |
+| `-expires <n>` | `0` | 覆盖 expires；`0` = 从容器明文读 |
+| `-normalize` | 关 | 应用 addon 的 Method expires 兜底 |
+| `-skip-token-check` | 关 | 跳过 v2 `tokenTag` 校验（token 未知时） |
+
+```bash
+"$BIN/vodkey" -key 5wqPBk89IkGBxXZy "$ROOT/<video-id>/<hash>_0/key.bin"
+```
+
+stdout 依次打印 `len=` / `hex=` / `text=%q`；stderr 打印 `container=%d bytes expires=%d token=%s`。位置参数不是恰好 1 个 → usage + 退出码 2。
+
+### 14.4 hlsget（路线 B，标准 HLS）
+
+```
+hlsget [flags] <playlist.m3u8 URL>
+```
+
+| flag | 默认 | 说明 |
+|---|---|---|
+| `<URL>` | —（必填） | master 或 media playlist |
+| `-o <file>` | `output.mp4` | 输出文件（`-no-mux` 时为 `.ts`） |
+| `-work <dir>` | `<out>.parts` | 分片工作目录 |
+| `-c <n>` | `4` | 下载并发 |
+| `-variant <i>` | `-1` | master 变体索引（`-1` = 最高带宽） |
+| `-retries <n>` | `3` | 单请求重试次数 |
+| `-timeout <d>` | `60s` | 单请求超时 |
+| `-no-mux` | 关 | 只拼成 `.ts`，跳过 ffmpeg |
+| `-keep-segments` | 关 | 保留每段明文分片 |
+| `-H 'K: V'` | 空 | 追加请求头（可重复） |
+| `-q` | 关 | 静默 |
+
+```bash
+"$BIN/hlsget" -o out.mp4 -c 8 \
+  -H 'Referer: https://host/' -H 'Cookie: sid=abc' \
+  https://host/master.m3u8
+"$BIN/hlsget" -no-mux -keep-segments -o out.ts https://host/index.m3u8
+```
+
+仅适用于 `#EXT-X-KEY METHOD=AES-128`；私有 `KOOLEARN` 请用 `vodexport`。
+
+### 14.5 验证输出
+
+```bash
+ffmpeg -v error -i export/<video-id>.mp4 -f null -
+```
+
+无输出即无解码错误。
+
+### 14.6 自测（无需密钥素材）
+
+每个脚本自带构建。产物写在临时目录并在退出时清理。
+
+```bash
+./scripts/smoke-test.sh   # 合成 METHOD=NONE 缓存：auto token、-no-mux md5、mp4 remux、ffmpeg 降级
+./scripts/e2e-test.sh     # 路线 B：本地造 AES-128 HLS 并逐字节比对
+go test ./...             # crypto / playlist 包单测
+```
+
+---
+
+## 15. 端到端导出全流程（Workflow 与流程图）
+
+### 15.1 前置条件
+
+- 桌面客户端已把目标课程视频**完整下载**到本地缓存（macOS：`~/Library/Application Support/koolearn/koolearn/download/`；Windows：`%APPDATA%\koolearn\koolearn\download\`）；
+- Go 1.23+（仅构建需要）；
+- ffmpeg（可选，装了才能直接得到 MP4）。
+
+### 15.2 Workflow（分步）
+
+1. **在客户端下载视频**——确保下载完成，缓存目录里生成 `<hash>_0.m3u8` / `key.bin` / `*.ts`。
+2. **安装 / 定位 skill**——按 §13 安装，或直接进入 `skill/koolearn-video-crypt-skill/`。
+3. **构建工具**——`./scripts/build.sh`，产物在 `bin/<goos>-<goarch>/`。
+4. **定位缓存根目录**——每个视频一个子目录，含唯一 `.m3u8` 即视为一个视频。
+5. **列出待导出清单**——`vodexport -list <root>`。
+6. **导出**——`vodexport -jobs 4 -out export <root>`（token 默认 `auto`；必要时 `-token` / `-only` / `-overwrite` / `-keep-ts`）。
+7. **校验**——`ffmpeg -v error -i export/<id>.mp4 -f null -`，汇总应为 `0 failed`。
+8. **排查（可选）**——单个 `key.bin` 解不出用 `vodkey` 诊断；标准 AES-128 场景改走 `hlsget`。
+
+### 15.3 全流程流程图
+
+```mermaid
+flowchart TD
+    S0(["客户端下载课程视频（缓存完成）"]) --> S1["安装 / 定位 skill（§13）"]
+    S1 --> S2["构建：./scripts/build.sh<br/>→ bin/&lt;goos&gt;-&lt;goarch&gt;/"]
+    S2 --> S3["定位缓存根目录<br/>~/Library/.../koolearn/download/"]
+    S3 --> S4["vodexport -list &lt;root&gt;<br/>核对发现的视频"]
+    S4 --> Q1{"有视频?"}
+    Q1 -->|否| F1["✗ 子目录需恰好一个 .m3u8<br/>→ 先在客户端下载"]
+    Q1 -->|是| S5["vodexport -jobs 4 -out export &lt;root&gt;<br/>token 默认 auto"]
+    S5 --> M1{"token 能自动恢复?"}
+    M1 -->|是| S6["按 cache/&lt;uid&gt; 精确匹配，正常校验"]
+    M1 -->|否| S7["跳过 v2 校验（token 不参与派生）<br/>仍能正确解密"]
+    S6 --> S8["逐视频：解 key.bin → 解密分片 → 拼接"]
+    S7 --> S8
+    S8 --> M2{"PATH 有 ffmpeg?"}
+    M2 -->|是| S9["ffmpeg remux → export/&lt;id&gt;.mp4"]
+    M2 -->|否| S10["降级 -no-mux → export/&lt;id&gt;.ts"]
+    S9 --> V["ffmpeg -v error -i ... -f null -<br/>校验 0 错误"]
+    S10 --> V
+    V --> R(["导出完成"])
+```
+
+### 15.4 失败排查对照
+
+| 现象 | 原因 / 处理 |
+|---|---|
+| `no videos found` | 子目录必须恰好含一个 `.m3u8` |
+| `token mismatch` | 显式 `-token` 给错；省略它让 `auto` 从 `cache/` 恢复 |
+| `key expired` | 缓存 `key.bin` 已过期；在客户端重新下载该视频 |
+| `ffmpeg not found ... falling back to -no-mux` | ffmpeg 缺失时的预期行为；装 ffmpeg 或接受 `.ts` |
+| `unsupported METHOD` | 仅支持 `KOOLEARN`（零 IV）与 `AES-128` |
+| 首个分片乱码 / 15 字节密钥 | §12.6 off-by-one；已由 `DecryptRaw` 回退处理，从本 skill 重新构建即可 |
 
 ---
 
